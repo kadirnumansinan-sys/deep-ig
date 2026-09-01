@@ -1,0 +1,16 @@
+node_modules
+dist
+.next
+.wrangler
+.deepbrief
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+npm-debug.log*
+*.tsbuildinfo
+Dockerfile*
+docker-compose*.yml
+docs
+README.md

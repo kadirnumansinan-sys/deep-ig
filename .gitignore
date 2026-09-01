@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.next/
+.wrangler/
+.deepbrief/
+.env
+.env.local
+.env.*.local
+npm-debug.log*
+*.tsbuildinfo

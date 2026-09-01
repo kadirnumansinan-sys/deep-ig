@@ -1,0 +1,66 @@
+services:
+  deepbrief:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: deepbrief-content-studio
+    environment:
+      IMAGE_PROXY_SECRET: ${IMAGE_PROXY_SECRET:-deepbrief-local-development-only}
+      DEEPBRIEF_DB_PATH: /data/deepbrief.sqlite
+      NEWSAPI_KEY: ${NEWSAPI_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_DAILY_COPY_LIMIT: ${OPENAI_DAILY_COPY_LIMIT:-40}
+      OPENAI_DAILY_UPSCALE_LIMIT: ${OPENAI_DAILY_UPSCALE_LIMIT:-6}
+      GROQ_API_KEY_1: ${GROQ_API_KEY_1:-}
+      GROQ_API_KEY_2: ${GROQ_API_KEY_2:-}
+      GROQ_ANALYSIS_MODEL: ${GROQ_ANALYSIS_MODEL:-openai/gpt-oss-20b}
+      GROQ_SEARCH_MODEL: ${GROQ_SEARCH_MODEL:-groq/compound}
+      GROQ_KEYS_SHARE_QUOTA: ${GROQ_KEYS_SHARE_QUOTA:-true}
+      GROQ_DAILY_ANALYSIS_LIMIT: ${GROQ_DAILY_ANALYSIS_LIMIT:-40}
+      GROQ_DAILY_SEARCH_LIMIT: ${GROQ_DAILY_SEARCH_LIMIT:-16}
+      GROQ_GAP_CACHE_HOURS: ${GROQ_GAP_CACHE_HOURS:-6}
+      INTERNAL_POLL_TOKEN: ${INTERNAL_POLL_TOKEN:-deepbrief-internal-local-only}
+      AUTH_REQUIRED: ${AUTH_REQUIRED:-false}
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      AUTH_BOOTSTRAP_EMAIL: ${AUTH_BOOTSTRAP_EMAIL:-}
+      AUTH_BOOTSTRAP_PASSWORD: ${AUTH_BOOTSTRAP_PASSWORD:-}
+      AUTH_BOOTSTRAP_NAME: ${AUTH_BOOTSTRAP_NAME:-Deepbrief Owner}
+      # Geçiş uyumluluğu: eski yerel .env dosyasındaki OpenAI anahtarı bu adla kalmış olabilir.
+      STABILITY_API_KEY: ${STABILITY_API_KEY:-}
+      NODE_ENV: production
+      TZ: Europe/Istanbul
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      - deepbrief_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: deepbrief-content-scheduler
+    environment:
+      INTERNAL_POLL_TOKEN: ${INTERNAL_POLL_TOKEN:-deepbrief-internal-local-only}
+      POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-600}
+    entrypoint: []
+    command:
+      - /bin/sh
+      - -c
+      - 'while true; do wget -q -T 240 --header="X-Deepbrief-Internal: $${INTERNAL_POLL_TOKEN}" --post-data="poll=1" -O /dev/null http://deepbrief:3000/api/internal/poll || true; sleep "$${POLL_INTERVAL_SECONDS}"; done'
+    depends_on:
+      deepbrief:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+
+volumes:
+  deepbrief_data:
+    name: deepbrief-content-studio-data
