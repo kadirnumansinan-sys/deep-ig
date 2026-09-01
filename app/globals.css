@@ -605,6 +605,26 @@ button { color: inherit; }
 .upscale-button:disabled { background: #ecece8; color: #87898e; cursor: not-allowed; }
 .upscale-button:disabled small { color: #a1a3a7; }
 .copy-button { margin-top: 10px; }
+
+.location-row { display: flex; gap: 8px; }
+.location-row .text-input { flex: 1; min-width: 0; }
+
+.locate-button {
+  align-items: center;
+  background: var(--ink);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  gap: 5px;
+  padding: 0 12px;
+}
+
+.locate-button:disabled { cursor: default; opacity: 0.45; }
 .crop-card {
   background: #fafaf8;
   border: 1px solid #e2e2de;

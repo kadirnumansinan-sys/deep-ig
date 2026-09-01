@@ -361,6 +361,11 @@ type CopyStatus = {
   provider: string;
   model: string;
   usage?: ProviderUsage;
+  groq?: {
+    configured: boolean;
+    model: string;
+    usage?: { requests: number; limit: number };
+  };
 };
 
 type ProviderUsage = {
@@ -375,6 +380,8 @@ type GeneratedCopyResponse = {
   visualText?: string;
   caption?: string;
   wordCounts?: { coverTitle: number; visualText: number; caption: number };
+  provider?: string;
+  model?: string;
   error?: string;
 };
 
@@ -505,6 +512,8 @@ export function Studio() {
   const [generatingCopy, setGeneratingCopy] = useState(false);
   const [copyConfigured, setCopyConfigured] = useState<boolean | null>(null);
   const [copyUsage, setCopyUsage] = useState<ProviderUsage | null>(null);
+  const [groqCopy, setGroqCopy] = useState<{ configured: boolean; requests: number; limit: number } | null>(null);
+  const [locating, setLocating] = useState(false);
   const [groqStatus, setGroqStatus] = useState<GroqStatusResponse | null>(null);
   const [groqChecking, setGroqChecking] = useState(false);
   const [notice, setNotice] = useState('');
@@ -771,6 +780,13 @@ export function Studio() {
         const body = await response.json() as CopyStatus;
         setCopyConfigured(response.ok && Boolean(body.configured));
         setCopyUsage(body.usage || null);
+        setGroqCopy(body.groq
+          ? {
+            configured: Boolean(body.groq.configured),
+            requests: body.groq.usage?.requests ?? 0,
+            limit: body.groq.usage?.limit ?? 30,
+          }
+          : null);
       })
       .catch(() => setCopyConfigured(false));
   }, []);
@@ -967,9 +983,13 @@ export function Studio() {
     reader.readAsDataURL(file);
   }
 
-  async function generateCopy() {
-    if (copyConfigured !== true) {
+  async function generateCopy(force?: 'openai') {
+    if (force === 'openai' && copyConfigured !== true) {
       setNotice('OPENAI_API_KEY sunucuda ayarlı değil. .env dosyasına ekleyip Docker’ı yeniden başlat.');
+      return;
+    }
+    if (copyConfigured !== true && groqCopy?.configured !== true) {
+      setNotice('Metin üretimi için GROQ_API_KEY_1 veya OPENAI_API_KEY sunucuda ayarlı olmalı.');
       return;
     }
     if (!draft.sourceTitle.trim() || !draft.sourceSummary.trim()) {
@@ -1048,7 +1068,11 @@ export function Studio() {
       const response = await fetch('/api/generate-copy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel: targetChannel, ...source }),
+        body: JSON.stringify({
+          channel: targetChannel,
+          ...source,
+          ...(force === 'openai' ? { provider: 'openai' } : {}),
+        }),
       });
       const body = await response.json().catch(() => ({ error: '' })) as GeneratedCopyResponse;
       if (!response.ok || !body.coverTitle || !body.visualText || !body.caption) {
@@ -1066,15 +1090,61 @@ export function Studio() {
           caption: body.caption || current[targetChannel].caption,
         },
       }));
-      setNotice(`Metinler tamamlandı: kapak ${body.wordCounts?.coverTitle ?? wordCount(body.coverTitle)} kelime, gönderi ${body.wordCounts?.visualText ?? wordCount(body.visualText)} kelime, caption ${body.wordCounts?.caption ?? wordCount(body.caption)} kelime.`);
+      const providerLabel = body.provider === 'groq' ? 'Groq (ücretsiz)' : 'OpenAI';
+      setNotice(`Metinler ${providerLabel} ile tamamlandı: kapak ${body.wordCounts?.coverTitle ?? wordCount(body.coverTitle)} kelime, gönderi ${body.wordCounts?.visualText ?? wordCount(body.visualText)} kelime, caption ${body.wordCounts?.caption ?? wordCount(body.caption)} kelime.`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Metinler üretilemedi.');
     } finally {
       setGeneratingCopy(false);
       void fetch('/api/generate-copy', { cache: 'no-store' })
         .then((response) => response.json() as Promise<CopyStatus>)
-        .then((status) => setCopyUsage(status.usage || null))
+        .then((status) => {
+          setCopyUsage(status.usage || null);
+          if (status.groq) {
+            setGroqCopy({
+              configured: Boolean(status.groq.configured),
+              requests: status.groq.usage?.requests ?? 0,
+              limit: status.groq.usage?.limit ?? 30,
+            });
+          }
+        })
         .catch(() => undefined);
+    }
+  }
+
+  async function findLocation() {
+    const title = draft.sourceTitle.trim() || draft.title.trim();
+    if (!title) {
+      setNotice('Konum bulmak için önce bir haber seç veya başlık gir.');
+      return;
+    }
+    setLocating(true);
+    try {
+      const response = await fetch('/api/groq/locate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channel,
+          title,
+          body: draft.sourceSummary.trim() || draft.body.trim(),
+          sourceName: draft.sourceName,
+        }),
+      });
+      const payload = await response.json().catch(() => ({})) as {
+        location?: { label?: string } | null;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(payload.error || 'Konum bulunamadı.');
+      if (payload.location?.label) {
+        updateDraft({ location: payload.location.label });
+        setNotice(`Konum bulundu: ${payload.location.label}`);
+      } else {
+        setNotice('Kaynak metinde açık bir konum yok; elle girebilirsin.');
+      }
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Konum bulunamadı; elle girebilirsin.');
+    } finally {
+      setLocating(false);
     }
   }
 
@@ -1391,11 +1461,12 @@ export function Studio() {
                 </small>
               </div>
             )}
-            {(copyConfigured || upscaleConfigured) && (
+            {(copyConfigured || upscaleConfigured || groqCopy?.configured) && (
               <div className="groq-budget openai-budget">
-                <span><Sparkles size={11} /> OpenAI maliyet koruması</span>
+                <span><Sparkles size={11} /> Metin/görsel maliyet koruması</span>
                 <small>
-                  Metin {copyUsage?.requests ?? 0}/{copyUsage?.limit ?? 40}
+                  Metin OpenAI {copyUsage?.requests ?? 0}/{copyUsage?.limit ?? 40}
+                  {groqCopy?.configured ? ` · Groq ${groqCopy.requests}/${groqCopy.limit}` : ''}
                   {' · '}görsel {upscaleUsage?.requests ?? 0}/{upscaleUsage?.limit ?? 6}
                 </small>
               </div>
@@ -1517,7 +1588,7 @@ export function Studio() {
 
             <button
               className="upscale-button copy-button"
-              disabled={!draft.sourceTitle || !draft.sourceSummary || Boolean(enrichingId) || generatingCopy || copyConfigured !== true}
+              disabled={!draft.sourceTitle || !draft.sourceSummary || Boolean(enrichingId) || generatingCopy || (copyConfigured !== true && groqCopy?.configured !== true)}
               onClick={() => void generateCopy()}
               type="button"
             >
@@ -1527,12 +1598,29 @@ export function Studio() {
                 <small>
                   {copyConfigured === null
                     ? 'API durumu kontrol ediliyor'
-                    : copyConfigured
-                      ? 'Kaynak tabanlı · 3 metin · GPT-5.6 Luna · ücretli'
-                      : 'OPENAI_API_KEY gerekli'}
+                    : groqCopy?.configured
+                      ? 'Önce Groq (ücretsiz) · gerekirse OpenAI'
+                      : copyConfigured
+                        ? 'Kaynak tabanlı · 3 metin · GPT-5.6 Luna · ücretli'
+                        : 'GROQ_API_KEY_1 veya OPENAI_API_KEY gerekli'}
                 </small>
               </span>
             </button>
+
+            {copyConfigured === true && groqCopy?.configured === true && (
+              <button
+                className="upscale-button copy-button"
+                disabled={!draft.sourceTitle || !draft.sourceSummary || Boolean(enrichingId) || generatingCopy}
+                onClick={() => void generateCopy('openai')}
+                type="button"
+              >
+                <Sparkles size={16} />
+                <span>
+                  <strong>OpenAI ile yeniden üret</strong>
+                  <small>Groq sonucu beğenmediysen · GPT-5.6 Luna · ücretli</small>
+                </span>
+              </button>
+            )}
 
             <label className="field-label" htmlFor="title">
               Kısa kapak başlığı <span>{wordCount(draft.title)} kelime · {draft.title.length}/105</span>
@@ -1574,14 +1662,26 @@ export function Studio() {
             <label className="field-label" htmlFor="location">
               Konum <span>Beyaz çubukta değişen tek alan</span>
             </label>
-            <input
-              className={`text-input ${draft.location.trim() ? '' : 'field-warning'}`}
-              id="location"
-              maxLength={54}
-              onChange={(event) => updateDraft({ location: event.target.value })}
-              placeholder="Örn. İstanbul, Türkiye"
-              value={draft.location}
-            />
+            <div className="location-row">
+              <input
+                className={`text-input ${draft.location.trim() ? '' : 'field-warning'}`}
+                id="location"
+                maxLength={54}
+                onChange={(event) => updateDraft({ location: event.target.value })}
+                placeholder="Örn. İstanbul, Türkiye"
+                value={draft.location}
+              />
+              <button
+                className="locate-button"
+                disabled={locating || (!draft.sourceTitle.trim() && !draft.title.trim())}
+                onClick={() => void findLocation()}
+                title="Kaynak metinden konumu Groq ile bul"
+                type="button"
+              >
+                {locating ? <LoaderCircle className="spin" size={12} /> : <MapPin size={12} />}
+                Konum bul
+              </button>
+            </div>
           </section>
         </aside>
 
