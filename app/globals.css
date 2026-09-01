@@ -945,8 +945,9 @@ button { color: inherit; }
 .safe-area { border: 1px dashed rgba(255, 255, 255, 0.18); inset: 5.2%; pointer-events: none; position: absolute; }
 .safe-area-cover, .safe-area-detail { display: none; }
 
-/* Yüzen mini kırpma önizlemesi yalnızca dar ekranda görünür. */
-.mini-preview, .crop-preview-toggle { display: none; }
+/* Yüzen mini kırpma önizlemesi yalnızca dar ekranda görünür.
+   Toggle, .crop-topline button kuralından daha özgül seçiciyle gizlenmeli. */
+.mini-preview, .crop-topline .crop-preview-toggle { display: none; }
 
 @media (max-width: 1050px) {
   .workspace { grid-template-columns: 420px 1fr; }
@@ -961,7 +962,7 @@ button { color: inherit; }
   .preview-key { display: none; }
   .preview-grid { gap: 32px; grid-template-columns: minmax(220px, 420px); }
   .export-panel { max-width: 100%; }
-  .crop-preview-toggle {
+  .crop-topline .crop-preview-toggle {
     background: transparent;
     border: 1px solid var(--line);
     border-radius: 6px;
