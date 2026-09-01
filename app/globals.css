@@ -605,6 +605,7 @@ button { color: inherit; }
 .upscale-button:disabled { background: #ecece8; color: #87898e; cursor: not-allowed; }
 .upscale-button:disabled small { color: #a1a3a7; }
 .copy-button { margin-top: 10px; }
+.caption-only-button { margin-top: 16px; }
 
 .image-options-strip {
   display: flex;

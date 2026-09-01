@@ -208,7 +208,7 @@ function structuredCandidates(html: string, title: string): ExcerptCandidate[] {
   return candidates;
 }
 
-function balancedElementInnerHtml(
+export function balancedElementInnerHtml(
   html: string,
   openingIndex: number,
   openingTag: string,

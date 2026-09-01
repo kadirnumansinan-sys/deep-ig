@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireApiAuth } from '@/lib/auth';
-import { decodeHtml, extractArticleExcerpt } from '@/lib/article-extractor';
+import { balancedElementInnerHtml, decodeHtml, extractArticleExcerpt } from '@/lib/article-extractor';
 import { freshnessFor } from '@/lib/news-intelligence';
 import { isSafeHttpsUrl, signUrl, verifyUrlSignature } from '@/lib/url-signing';
 
@@ -47,9 +47,61 @@ function linkImages(html: string): string[] {
   return images;
 }
 
+// "İlgili haberler", "çok okunanlar", sidebar ve reklam kutuları da <img> taşıyor; bunlar
+// taranınca başka haberlerin görselleri seçenek listesine sızıyordu. Bu blokları at.
+const noiseBlockPattern = /(related|ilgili|onerilen|önerilen|recommend|recirc|populer|popüler|popular|trending|most[-_]?read|cok[-_]?okunan|çok[-_]?okunan|sidebar|widget|promo|teaser|advert|reklam|banner|newsletter|abone|comment|yorum|footer|header|masthead|menu|social|share|paylas|paylaş|other[-_]?news|diger|diğer|son[-_]?haber|latest[-_]?news)/iu;
+
+function stripNoiseBlocks(html: string): string {
+  const openings = /<(aside|nav|footer|div|section|ul|ol)\b[^>]*>/giu;
+  let output = html;
+  for (let pass = 0; pass < 400; pass += 1) {
+    openings.lastIndex = 0;
+    let match: RegExpExecArray | null = null;
+    let hit: RegExpExecArray | null = null;
+    while ((match = openings.exec(output))) {
+      const tagName = match[1].toLowerCase();
+      const isStructuralNoise = tagName === 'aside' || tagName === 'nav' || tagName === 'footer';
+      if (isStructuralNoise || noiseBlockPattern.test(match[0])) {
+        hit = match;
+        break;
+      }
+    }
+    if (!hit) return output;
+    const tagName = hit[1].toLowerCase();
+    const inner = balancedElementInnerHtml(output, hit.index, hit[0], tagName);
+    const end = inner
+      ? hit.index + hit[0].length + inner.length + tagName.length + 3
+      : hit.index + hit[0].length;
+    output = `${output.slice(0, hit.index)}${output.slice(end)}`;
+  }
+  return output;
+}
+
+// Görsel taraması makale gövdesiyle sınırlanır; gövde bulunamazsa tüm sayfa kullanılır
+// ama gürültü blokları yine de temizlenir.
+function articleImageRegion(html: string): string {
+  const containers = [
+    /<article\b[^>]*>/giu,
+    /<(?:div|section)\b[^>]*(?:class|id)\s*=\s*(["'])[^"']*(?:article[-_\s]?body|article[-_\s]?content|news[-_\s]?body|news[-_\s]?content|story[-_\s]?body|entry[-_\s]?content|post[-_\s]?content|content[-_\s]?body)[^"']*\1[^>]*>/giu,
+    /<main\b[^>]*>/giu,
+  ];
+  for (const pattern of containers) {
+    let best = '';
+    let match: RegExpExecArray | null;
+    pattern.lastIndex = 0;
+    while ((match = pattern.exec(html))) {
+      const tagName = (match[0].match(/^<([a-z]+)/i)?.[1] ?? 'div').toLowerCase();
+      const inner = balancedElementInnerHtml(html, match.index, match[0], tagName);
+      if (inner.length > best.length) best = inner;
+    }
+    if (best.length >= 400) return stripNoiseBlocks(best);
+  }
+  return stripNoiseBlocks(html);
+}
+
 function srcsetImages(html: string): string[] {
   const images: Array<{ url: string; width: number }> = [];
-  for (const tag of html.match(/<(?:img|source)\b[^>]*>/gi) ?? []) {
+  for (const tag of articleImageRegion(html).match(/<(?:img|source)\b[^>]*>/gi) ?? []) {
     const attrs = attributes(tag);
     const srcset = attrs.get('srcset') || '';
     for (const part of srcset.split(',')) {
@@ -152,8 +204,11 @@ function validImageCandidate(raw: string, baseUrl: string): string {
   try {
     const resolved = upgradeKnownPublisherImage(new URL(decodeHtml(raw), baseUrl).toString());
     if (!isSafeHttpsUrl(resolved)) return '';
-    if (/(?:^|[\/_-])(logo|icon|avatar|favicon|sprite|badge)(?:[\/_-]|\.|$)/i.test(resolved)) return '';
+    // Süsleme/marka grafikleri kapak fotoğrafı olarak seçilince önizlemede sivri-oval
+    // artefaktlar üretiyordu; bunları da ele.
+    if (/(?:^|[\/_-])(logo|icon|avatar|favicon|sprite|badge|placeholder|default|watermark|brand|bumper|promo|banner|player|overlay|graphic|template|frame)(?:[\/_-]|\.|$)/i.test(resolved)) return '';
     if (/\.(?:svg|gif)(?:\?|$)/i.test(resolved)) return '';
+    if (/^data:/i.test(resolved)) return '';
     return resolved;
   } catch {
     return '';

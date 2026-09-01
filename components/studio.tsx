@@ -526,6 +526,7 @@ export function Studio() {
   const [upscaleConfigured, setUpscaleConfigured] = useState<boolean | null>(null);
   const [upscaleUsage, setUpscaleUsage] = useState<ProviderUsage | null>(null);
   const [generatingCopy, setGeneratingCopy] = useState(false);
+  const [captionOnlyBusy, setCaptionOnlyBusy] = useState(false);
   const [copyConfigured, setCopyConfigured] = useState<boolean | null>(null);
   const [copyUsage, setCopyUsage] = useState<ProviderUsage | null>(null);
   const [groqCopy, setGroqCopy] = useState<{ configured: boolean; requests: number; limit: number } | null>(null);
@@ -1043,7 +1044,7 @@ export function Studio() {
     setNotice(`${option.width} × ${option.height}px görsel seçildi (${option.origin}). Kırpmalar sıfırlandı.`);
   }
 
-  async function generateCopy(force?: 'openai') {
+  async function generateCopy(force?: 'openai', only?: 'caption') {
     if (force === 'openai' && copyConfigured !== true) {
       setNotice('OPENAI_API_KEY sunucuda ayarlı değil. .env dosyasına ekleyip Docker’ı yeniden başlat.');
       return;
@@ -1123,7 +1124,10 @@ export function Studio() {
       sourceName: draft.sourceName,
     };
     setGeneratingCopy(true);
-    setNotice('Kaynağa bağlı görsel metni ve caption hazırlanıyor…');
+    setCaptionOnlyBusy(only === 'caption');
+    setNotice(only === 'caption'
+      ? 'Yalnızca gönderi açıklaması hazırlanıyor…'
+      : 'Kaynağa bağlı görsel metni ve caption hazırlanıyor…');
     try {
       const response = await fetch('/api/generate-copy', {
         method: 'POST',
@@ -1139,23 +1143,30 @@ export function Studio() {
         throw new Error(body.error || 'Metinler üretilemedi.');
       }
 
+      // Sadece-caption modunda kapak ve gönderi metni korunur; kullanıcı beğendiği
+      // yazıları kaybetmeden açıklamayı yeniden üretebilir.
       setDrafts((current) => ({
         ...current,
-        [targetChannel]: {
-          ...current[targetChannel],
-          title: body.coverTitle
-            ? body.coverTitle.toLocaleUpperCase(targetChannel === 'international' ? 'en-US' : 'tr-TR')
-            : current[targetChannel].title,
-          body: body.visualText || current[targetChannel].body,
-          caption: body.caption || current[targetChannel].caption,
-        },
+        [targetChannel]: only === 'caption'
+          ? { ...current[targetChannel], caption: body.caption || current[targetChannel].caption }
+          : {
+            ...current[targetChannel],
+            title: body.coverTitle
+              ? body.coverTitle.toLocaleUpperCase(targetChannel === 'international' ? 'en-US' : 'tr-TR')
+              : current[targetChannel].title,
+            body: body.visualText || current[targetChannel].body,
+            caption: body.caption || current[targetChannel].caption,
+          },
       }));
       const providerLabel = body.provider === 'groq' ? 'Groq (ücretsiz)' : 'OpenAI';
-      setNotice(`Metinler ${providerLabel} ile tamamlandı: kapak ${body.wordCounts?.coverTitle ?? wordCount(body.coverTitle)} kelime, gönderi ${body.wordCounts?.visualText ?? wordCount(body.visualText)} kelime, caption ${body.wordCounts?.caption ?? wordCount(body.caption)} kelime.`);
+      setNotice(only === 'caption'
+        ? `Gönderi açıklaması ${providerLabel} ile yenilendi: ${body.wordCounts?.caption ?? wordCount(body.caption)} kelime. Kapak ve gönderi metni değişmedi.`
+        : `Metinler ${providerLabel} ile tamamlandı: kapak ${body.wordCounts?.coverTitle ?? wordCount(body.coverTitle)} kelime, gönderi ${body.wordCounts?.visualText ?? wordCount(body.visualText)} kelime, caption ${body.wordCounts?.caption ?? wordCount(body.caption)} kelime.`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Metinler üretilemedi.');
     } finally {
       setGeneratingCopy(false);
+      setCaptionOnlyBusy(false);
       void fetch('/api/generate-copy', { cache: 'no-store' })
         .then((response) => response.json() as Promise<CopyStatus>)
         .then((status) => {
@@ -1734,6 +1745,20 @@ export function Studio() {
               rows={7}
               value={draft.body}
             />
+
+            {/* Kapak ve gönderi metnini beğendiysen sadece açıklamayı yenilemek için. */}
+            <button
+              className="upscale-button copy-button caption-only-button"
+              disabled={!draft.sourceTitle || !draft.sourceSummary || Boolean(enrichingId) || generatingCopy || (copyConfigured !== true && groqCopy?.configured !== true)}
+              onClick={() => void generateCopy(undefined, 'caption')}
+              type="button"
+            >
+              {captionOnlyBusy ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
+              <span>
+                <strong>{captionOnlyBusy ? 'Açıklama üretiliyor…' : 'Sadece açıklamayı üret'}</strong>
+                <small>Kapak başlığı ve gönderi metni olduğu gibi kalır</small>
+              </span>
+            </button>
 
             <label className="field-label" htmlFor="caption">
               Gönderi açıklaması (caption) <span>{wordCount(draft.caption)} kelime · hedef 50–95</span>
