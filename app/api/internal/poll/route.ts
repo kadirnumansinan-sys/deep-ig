@@ -12,7 +12,10 @@ function isVercelCronAuthorized(request: Request): boolean {
   const isCronRequest = request.headers.get('x-vercel-cron') === '1';
   if (!isCronRequest) return false;
   const provided = new URL(request.url).searchParams.get('token')?.trim() || '';
-  const expected = process.env.VERCEL_POLL_TOKEN?.trim() || '';
+  const expected =
+    process.env.DEEPBRIEF_CRON_TOKEN?.trim() ||
+    process.env.VERCEL_POLL_TOKEN?.trim() ||
+    '';
   if (!expected) return true;
   if (!provided) return false;
   const encodedProvided = new TextEncoder().encode(provided);
