@@ -94,12 +94,13 @@ function ImageLayer({ image, crop, label }: { image: string; crop: CropSettings;
   return <img alt={label} className="canvas-photo" crossOrigin="anonymous" src={image} style={imageStyle(crop)} />;
 }
 
-export function ReelPreview({ channel, draft, coverRef, detailRef }: PreviewProps) {
-  const copyClass = draft.body.length > 255
-    ? 'detail-copy copy-dense'
-    : draft.body.length > 205
-      ? 'detail-copy copy-compact'
-      : 'detail-copy';
+type CanvasProps = {
+  channel: Channel;
+  draft: DraftContent;
+  canvasRef?: RefObject<HTMLDivElement | null>;
+};
+
+function CoverCanvas({ channel, draft, canvasRef }: CanvasProps) {
   const titleClass = draft.title.length > 110
     ? 'cover-title title-tight'
     : draft.title.length > 80
@@ -109,25 +110,67 @@ export function ReelPreview({ channel, draft, coverRef, detailRef }: PreviewProp
         : 'cover-title';
 
   return (
+    <div className={`reel-canvas cover-canvas theme-${channel}`} ref={canvasRef}>
+      <ImageLayer image={draft.image} crop={draft.coverCrop} label="Kapak görseli" />
+      <Artwork className="cover-overlay-art" src={coverOverlays[channel]} />
+      {coverLockups[channel]
+        ? <Artwork className="cover-brand-art" src={coverLockups[channel]} />
+        : (
+          <div className="cover-brand">
+            <strong>Deepbrief</strong>
+            <em>{labels[channel]}</em>
+          </div>
+        )}
+      <h3 className={titleClass}>{draft.title || 'KISA KONU BAŞLIĞI'}</h3>
+    </div>
+  );
+}
+
+function DetailCanvas({ channel, draft, canvasRef }: CanvasProps) {
+  const copyClass = draft.body.length > 255
+    ? 'detail-copy copy-dense'
+    : draft.body.length > 205
+      ? 'detail-copy copy-compact'
+      : 'detail-copy';
+
+  return (
+    <div className={`reel-canvas detail-canvas theme-${channel}`} ref={canvasRef}>
+      <div className="detail-card">
+        <ImageLayer image={draft.image} crop={draft.detailCrop} label="Gönderi görseli" />
+        <Artwork className="detail-overlay-art" src={detailOverlays[channel]} />
+        {channel === 'history' && (
+          <Artwork className="today-lockup-art" src="/assets/deepbrief/brand/tarihte-bugun-lockup.png" />
+        )}
+        <Artwork className="rail-artwork" src={railArtwork[channel]} />
+        {railAvatars[channel] && <Artwork className="rail-channel-avatar" src={railAvatars[channel]} />}
+        <span className="rail-location-art">{draft.location || 'KONUM GİRİLMEDİ'}</span>
+        <span className="rail-wordmark-art">Deepbrief</span>
+        <p className={copyClass}>{draft.body || 'Kaynağından aldığın gönderi metnini buraya yaz.'}</p>
+      </div>
+    </div>
+  );
+}
+
+// Mobil yüzen mini önizleme: ref'siz, kırpma hedefine göre tek kanvas.
+export function MiniCropPreview({ channel, draft, target }: {
+  channel: Channel;
+  draft: DraftContent;
+  target: 'cover' | 'detail';
+}) {
+  return target === 'cover'
+    ? <CoverCanvas channel={channel} draft={draft} />
+    : <DetailCanvas channel={channel} draft={draft} />;
+}
+
+export function ReelPreview({ channel, draft, coverRef, detailRef }: PreviewProps) {
+  return (
     <div className="preview-grid">
       <article className="asset-block">
         <div className="asset-label">
           <span>01 · THUMBNAIL</span>
           <small>1080 × 1920 · 9:16</small>
         </div>
-        <div className={`reel-canvas cover-canvas theme-${channel}`} ref={coverRef}>
-          <ImageLayer image={draft.image} crop={draft.coverCrop} label="Kapak görseli" />
-          <Artwork className="cover-overlay-art" src={coverOverlays[channel]} />
-          {coverLockups[channel]
-            ? <Artwork className="cover-brand-art" src={coverLockups[channel]} />
-            : (
-              <div className="cover-brand">
-                <strong>Deepbrief</strong>
-                <em>{labels[channel]}</em>
-              </div>
-            )}
-          <h3 className={titleClass}>{draft.title || 'KISA KONU BAŞLIĞI'}</h3>
-        </div>
+        <CoverCanvas canvasRef={coverRef} channel={channel} draft={draft} />
         <p className="asset-note">Koyu renk katmanı · Reels kapak görünümü</p>
       </article>
 
@@ -136,20 +179,7 @@ export function ReelPreview({ channel, draft, coverRef, detailRef }: PreviewProp
           <span>02 · GÖNDERİ</span>
           <small>1080 × 1920 · 3:4 kart</small>
         </div>
-        <div className={`reel-canvas detail-canvas theme-${channel}`} ref={detailRef}>
-          <div className="detail-card">
-            <ImageLayer image={draft.image} crop={draft.detailCrop} label="Gönderi görseli" />
-            <Artwork className="detail-overlay-art" src={detailOverlays[channel]} />
-            {channel === 'history' && (
-              <Artwork className="today-lockup-art" src="/assets/deepbrief/brand/tarihte-bugun-lockup.png" />
-            )}
-            <Artwork className="rail-artwork" src={railArtwork[channel]} />
-            {railAvatars[channel] && <Artwork className="rail-channel-avatar" src={railAvatars[channel]} />}
-            <span className="rail-location-art">{draft.location || 'KONUM GİRİLMEDİ'}</span>
-            <span className="rail-wordmark-art">Deepbrief</span>
-            <p className={copyClass}>{draft.body || 'Kaynağından aldığın gönderi metnini buraya yaz.'}</p>
-          </div>
-        </div>
+        <DetailCanvas canvasRef={detailRef} channel={channel} draft={draft} />
         <p className="asset-note">Daha açık renk katmanı · siyah 9:16 zemin üzerinde 3:4 kart</p>
       </article>
     </div>

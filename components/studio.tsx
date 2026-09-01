@@ -16,9 +16,10 @@ import {
   ShieldCheck,
   Sparkles,
   SlidersHorizontal,
+  X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ReelPreview, type CropSettings, type DraftContent } from '@/components/reel-preview';
+import { MiniCropPreview, ReelPreview, type CropSettings, type DraftContent } from '@/components/reel-preview';
 import { filterCandidates, type CandidateFilter } from '@/lib/candidate-filters';
 import type {
   Channel,
@@ -38,6 +39,13 @@ import {
 import { loadStudioState, saveStudioState } from '@/lib/draft-storage';
 import { isLanguageMatch } from '@/lib/language';
 
+type ImageOption = {
+  src: string;
+  width: number;
+  height: number;
+  origin: string;
+};
+
 type Draft = DraftContent & {
   caption: string;
   sourceName: string;
@@ -47,6 +55,7 @@ type Draft = DraftContent & {
   sourceSummary: string;
   imageWidth: number;
   imageHeight: number;
+  imageOptions: ImageOption[];
   sourceFreshnessStatus: FreshnessStatus;
 };
 
@@ -87,6 +96,7 @@ const initialDrafts: Record<Channel, Draft> = {
     sourceTitle: '',
     sourceSummary: '',
     imageWidth: 1600,
+    imageOptions: [],
     imageHeight: 1067,
     sourceFreshnessStatus: 'today',
   },
@@ -104,6 +114,7 @@ const initialDrafts: Record<Channel, Draft> = {
     sourceTitle: '',
     sourceSummary: '',
     imageWidth: 1600,
+    imageOptions: [],
     imageHeight: 1067,
     sourceFreshnessStatus: 'today',
   },
@@ -121,6 +132,7 @@ const initialDrafts: Record<Channel, Draft> = {
     sourceTitle: '',
     sourceSummary: '',
     imageWidth: 1600,
+    imageOptions: [],
     imageHeight: 1067,
     sourceFreshnessStatus: 'today',
   },
@@ -138,6 +150,7 @@ const initialDrafts: Record<Channel, Draft> = {
     sourceTitle: '',
     sourceSummary: '',
     imageWidth: 1600,
+    imageOptions: [],
     imageHeight: 1067,
     sourceFreshnessStatus: 'today',
   },
@@ -171,6 +184,7 @@ function restoreDraft(base: Draft, saved?: Partial<Draft>): Draft {
     caption: captionIsUnsafe ? '' : cleanCaption,
     sourceTitle,
     sourceSummary,
+    imageOptions: Array.isArray(merged.imageOptions) ? merged.imageOptions : [],
   };
 }
 
@@ -503,6 +517,8 @@ export function Studio() {
   const [candidateFilters, setCandidateFilters] = useState<Set<CandidateFilter>>(() => new Set());
   const [showAll, setShowAll] = useState(false);
   const [cropTarget, setCropTarget] = useState<'cover' | 'detail'>('cover');
+  const [miniPreviewOpen, setMiniPreviewOpen] = useState(false);
+  const [isNarrow, setIsNarrow] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [enrichingId, setEnrichingId] = useState('');
   const [upscaling, setUpscaling] = useState(false);
@@ -555,6 +571,8 @@ export function Studio() {
   function updateCrop(patch: Partial<CropSettings>) {
     const key = cropTarget === 'cover' ? 'coverCrop' : 'detailCrop';
     updateDraft({ [key]: { ...draft[key], ...patch } });
+    // Dar ekranda önizleme kırpma panelinin altında kalıyor; yüzen mini önizlemeyi aç.
+    if (isNarrow) setMiniPreviewOpen(true);
   }
 
   async function scanSources(force = false) {
@@ -765,6 +783,18 @@ export function Studio() {
   }, [channel]);
 
   useEffect(() => {
+    const query = window.matchMedia('(max-width: 760px)');
+    const apply = (matches: boolean) => {
+      setIsNarrow(matches);
+      if (!matches) setMiniPreviewOpen(false);
+    };
+    apply(query.matches);
+    const listener = (event: MediaQueryListEvent) => apply(event.matches);
+    query.addEventListener('change', listener);
+    return () => query.removeEventListener('change', listener);
+  }, []);
+
+  useEffect(() => {
     void fetch('/api/upscale', { cache: 'no-store' })
       .then(async (response) => {
         const body = await response.json() as UpscaleStatus;
@@ -857,6 +887,7 @@ export function Studio() {
         image: '',
         imageWidth: 0,
         imageHeight: 0,
+        imageOptions: [],
         sourceFreshnessStatus: candidate.freshnessStatus || 'unverified',
         sourceName: candidate.sourceName,
         sourceUrl: candidate.sourceUrl,
@@ -923,17 +954,19 @@ export function Studio() {
     const uniqueVariants = variants.filter((variant, index, list) => (
       list.findIndex((item) => item.src === variant.src) === index
     ));
-    let best: { src: string; width: number; height: number; origin: string } | null = null;
+    // Madde 5: ölçülebilen tüm varyantlar saklanır; kullanıcı şeritten seçebilir.
+    const measured: ImageOption[] = [];
     for (const variant of uniqueVariants) {
       try {
         const size = await measureImage(variant.src);
-        if (!best || size.width * size.height > best.width * best.height) {
-          best = { ...variant, ...size };
-        }
+        measured.push({ ...variant, ...size });
       } catch {
         // Try the next source image.
       }
     }
+    measured.sort((left, right) => right.width * right.height - left.width * left.height);
+    const options = measured.slice(0, 10);
+    const best = options[0] || null;
 
     if (selectionRequestRef.current !== requestId) return;
     if (best) {
@@ -944,6 +977,7 @@ export function Studio() {
           image: best.src,
           imageWidth: best.width,
           imageHeight: best.height,
+          imageOptions: options,
         },
       }));
       const successNotice = isPublicationQuality(best.width, best.height)
@@ -967,13 +1001,27 @@ export function Studio() {
       if (typeof reader.result !== 'string') return;
       const image = new Image();
       image.onload = () => {
-        updateDraft({
-          image: reader.result as string,
-          imageWidth: image.naturalWidth,
-          imageHeight: image.naturalHeight,
-          coverCrop: { ...defaultCrop },
-          detailCrop: { ...defaultCrop },
-        });
+        const uploaded: ImageOption = {
+          src: reader.result as string,
+          width: image.naturalWidth,
+          height: image.naturalHeight,
+          origin: 'yükleme',
+        };
+        setDrafts((current) => ({
+          ...current,
+          [channel]: {
+            ...current[channel],
+            image: uploaded.src,
+            imageWidth: uploaded.width,
+            imageHeight: uploaded.height,
+            imageOptions: [
+              uploaded,
+              ...current[channel].imageOptions.filter((option) => option.src !== uploaded.src),
+            ].slice(0, 10),
+            coverCrop: { ...defaultCrop },
+            detailCrop: { ...defaultCrop },
+          },
+        }));
         setNotice(!isPublicationQuality(image.naturalWidth, image.naturalHeight)
           ? `Görsel ${image.naturalWidth} × ${image.naturalHeight}px olarak eklendi. İstersen kalitesini artırabilirsin.`
           : 'Görsel yüklendi. Kapak ve gönderi kırpmasını ayrı ayrı ayarlayabilirsin.');
@@ -981,6 +1029,18 @@ export function Studio() {
       image.src = reader.result as string;
     };
     reader.readAsDataURL(file);
+  }
+
+  function chooseImageOption(option: ImageOption) {
+    if (draft.image === option.src) return;
+    updateDraft({
+      image: option.src,
+      imageWidth: option.width,
+      imageHeight: option.height,
+      coverCrop: { ...defaultCrop },
+      detailCrop: { ...defaultCrop },
+    });
+    setNotice(`${option.width} × ${option.height}px görsel seçildi (${option.origin}). Kırpmalar sıfırlandı.`);
   }
 
   async function generateCopy(force?: 'openai') {
@@ -1504,6 +1564,28 @@ export function Studio() {
                   : 'Görsel seçilmedi'}
               </strong>
             </div>
+            {draft.imageOptions.length > 1 && (
+              <>
+                <label className="field-label">
+                  Görsel seçenekleri <span>{draft.imageOptions.length} görsel bulundu</span>
+                </label>
+                <div className="image-options-strip">
+                  {draft.imageOptions.map((option) => (
+                    <button
+                      className={`image-option ${draft.image === option.src ? 'active' : ''}`}
+                      key={option.src.slice(0, 200)}
+                      onClick={() => chooseImageOption(option)}
+                      title={`${option.width} × ${option.height}px · ${option.origin}`}
+                      type="button"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img alt="" loading="lazy" src={option.src} />
+                      <small>{option.width}×{option.height}</small>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
             <button
               className="upscale-button"
               disabled={!draft.image || localEnhancing || upscaling || isPublicationQuality(draft.imageWidth, draft.imageHeight)}
@@ -1544,6 +1626,13 @@ export function Studio() {
             <div className="crop-card">
               <div className="crop-topline">
                 <span><SlidersHorizontal size={13} /> Kırpma</span>
+                <button
+                  className="crop-preview-toggle"
+                  onClick={() => setMiniPreviewOpen((open) => !open)}
+                  type="button"
+                >
+                  {miniPreviewOpen ? 'Önizlemeyi kapat' : 'Önizleme'}
+                </button>
                 <button onClick={() => updateCrop(defaultCrop)} type="button"><RotateCcw size={11} /> Sıfırla</button>
               </div>
               <div className="crop-tabs">
@@ -1708,6 +1797,20 @@ export function Studio() {
           </div>
         </section>
       </div>
+
+      {isNarrow && miniPreviewOpen && (
+        <div className="mini-preview">
+          <button
+            aria-label="Mini önizlemeyi kapat"
+            className="mini-preview-close"
+            onClick={() => setMiniPreviewOpen(false)}
+            type="button"
+          >
+            <X size={12} />
+          </button>
+          <MiniCropPreview channel={channel} draft={draft} target={cropTarget} />
+        </div>
+      )}
 
       {notice && <div className="toast" role="status">{notice}</div>}
     </main>

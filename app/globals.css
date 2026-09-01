@@ -606,6 +606,43 @@ button { color: inherit; }
 .upscale-button:disabled small { color: #a1a3a7; }
 .copy-button { margin-top: 10px; }
 
+.image-options-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.image-option {
+  background: #fff;
+  border: 2px solid #e3e0d8;
+  border-radius: 8px;
+  cursor: pointer;
+  flex: 0 0 auto;
+  overflow: hidden;
+  padding: 0;
+  position: relative;
+  width: 76px;
+}
+
+.image-option img {
+  display: block;
+  height: 54px;
+  object-fit: cover;
+  width: 100%;
+}
+
+.image-option small {
+  color: #6d6a61;
+  display: block;
+  font-size: 8px;
+  padding: 2px 4px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.image-option.active { border-color: var(--ink); }
+
 .location-row { display: flex; gap: 8px; }
 .location-row .text-input { flex: 1; min-width: 0; }
 
@@ -908,6 +945,9 @@ button { color: inherit; }
 .safe-area { border: 1px dashed rgba(255, 255, 255, 0.18); inset: 5.2%; pointer-events: none; position: absolute; }
 .safe-area-cover, .safe-area-detail { display: none; }
 
+/* Yüzen mini kırpma önizlemesi yalnızca dar ekranda görünür. */
+.mini-preview, .crop-preview-toggle { display: none; }
+
 @media (max-width: 1050px) {
   .workspace { grid-template-columns: 420px 1fr; }
   .preview-grid { grid-template-columns: minmax(230px, 330px); }
@@ -919,6 +959,50 @@ button { color: inherit; }
   .control-panel { border-bottom: 1px solid var(--line); border-right: 0; height: auto; overflow: visible; padding: 24px 18px; position: static; }
   .preview-stage { padding: 28px 18px 48px; }
   .preview-key { display: none; }
-  .preview-grid { gap: 32px; grid-template-columns: minmax(240px, 360px); }
-  .export-panel { max-width: 360px; }
+  .preview-grid { gap: 32px; grid-template-columns: minmax(220px, 420px); }
+  .export-panel { max-width: 100%; }
+  .crop-preview-toggle {
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--ink);
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 9px;
+    letter-spacing: 0.04em;
+    padding: 4px 8px;
+    text-transform: uppercase;
+  }
+  /* z-index 40: toast (z-50) üstte kalır; bottom 74px toast bandını (bottom 22px) boş bırakır. */
+  .mini-preview {
+    border-radius: 10px;
+    bottom: 74px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    display: block;
+    max-width: 210px;
+    overflow: hidden;
+    pointer-events: none;
+    position: fixed;
+    right: 12px;
+    width: 42vw;
+    z-index: 40;
+  }
+  .mini-preview .reel-canvas { height: auto; width: 100%; }
+  .mini-preview-close {
+    align-items: center;
+    background: rgba(0, 0, 0, 0.62);
+    border: 0;
+    border-radius: 999px;
+    color: #fff;
+    cursor: pointer;
+    display: inline-flex;
+    height: 20px;
+    justify-content: center;
+    pointer-events: auto;
+    position: absolute;
+    right: 5px;
+    top: 5px;
+    width: 20px;
+    z-index: 1;
+  }
 }
