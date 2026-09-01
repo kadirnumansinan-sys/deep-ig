@@ -118,7 +118,9 @@ async function generate(
           text: sourceText,
         },
       }),
-      max_output_tokens: 500,
+      // Kelime dizisi JSON'unda 54 kelimelik caption 353 token yakıyor; 95 kelimelik
+      // üst sınır 500'lük bütçeyi aşıp yanıtı kesiyor ve parse null dönüyordu.
+      max_output_tokens: 1200,
       reasoning: { effort: 'none' },
       prompt_cache_key: 'deepbrief-copy-v3',
       store: false,
