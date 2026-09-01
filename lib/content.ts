@@ -54,6 +54,7 @@ export type ContentCandidate = {
   publishedAt: string;
   score: number;
   signal: string;
+  breaking?: boolean;
   canonicalPublishedAt?: string;
   canonicalModifiedAt?: string;
   freshnessStatus?: FreshnessStatus;

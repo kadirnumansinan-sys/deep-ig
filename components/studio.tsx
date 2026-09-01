@@ -444,7 +444,7 @@ function CandidateCard({
   const candidateTitle = candidate.readinessIssues?.join(' ') || '';
   return (
     <button
-      className={`candidate-card freshness-${candidate.freshnessStatus || 'unverified'}`}
+      className={`candidate-card freshness-${candidate.freshnessStatus || 'unverified'}${candidate.breaking ? ' is-breaking' : ''}`}
       disabled={loading || candidate.freshnessStatus === 'stale'}
       onClick={onSelect}
       title={candidateTitle}
@@ -462,6 +462,7 @@ function CandidateCard({
       </span>
       <span className="candidate-content">
         <span className="candidate-meta">
+          {candidate.breaking && <b className="breaking-badge">SON DAKİKA</b>}
           <b>{candidate.kind === 'trend' ? 'TREND' : candidate.kind === 'history' ? 'TARİH' : 'HABER'}</b>
           <i>{candidate.signal}</i>
         </span>
@@ -640,6 +641,7 @@ export function Studio() {
           };
         }).sort((left, right) => (
           Number(left.freshnessStatus === 'stale') - Number(right.freshnessStatus === 'stale')
+          || Number(right.breaking === true) - Number(left.breaking === true)
           || right.score - left.score
         )),
       };
@@ -663,7 +665,7 @@ export function Studio() {
         fetch('/api/groq/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ channel: targetChannel, candidates: snapshot.candidates.slice(0, 12) }),
+          body: JSON.stringify({ channel: targetChannel, candidates: snapshot.candidates.slice(0, 24) }),
         }).then(async (response) => ({
           ok: response.ok,
           body: await response.json() as GroqAnalysisResponse,
@@ -697,6 +699,7 @@ export function Studio() {
         }
         merged.sort((left, right) => (
           Number(left.freshnessStatus === 'stale') - Number(right.freshnessStatus === 'stale')
+          || Number(right.breaking === true) - Number(left.breaking === true)
           || right.score - left.score
         ));
         return {

@@ -212,11 +212,25 @@ function sourceTrust(sourceName: string, sourceUrl: string, sourceType: ContentC
   return 6;
 }
 
+// \b Türkçe diakritiklerde güvenilmez (ASCII tabanlı); Unicode harf sınırları kullanılır.
+const HIGH_IMPACT_PATTERN = /(?<![\p{L}\d])(son dakika|asgari ücret\p{L}*|merkez bankas\p{L}*|hayatını kaybet\p{L}*|iptal edil\p{L}*|karar\p{L}*|yasa\p{L}*|kanun\p{L}*|yönetmelik\p{L}*|faiz\p{L}*|enflasyon\p{L}*|deprem\p{L}*|sel|yangın\p{L}*|saldırı\p{L}*|savaş\p{L}*|patlama\p{L}*|çatışma\p{L}*|grev\p{L}*|zam|zaml\p{L}+|kabine\p{L}*|ölü\p{L}*|öldü\p{L}*|ölen|tahliye\p{L}*|tutukland\p{L}*|istifa\p{L}*|seçim\p{L}*|kriz\p{L}*|acil\p{L}*|rekor\p{L}*)(?![\p{L}\d])/iu;
+
+// Sayısal büyüklük/sonuç işaretleri: can kaybı, oran, para tutarı, deprem büyüklüğü.
+const MAGNITUDE_PATTERN = /(\d+\s*(ölü|yaralı|kayıp|gözaltı|tutuklama)(?!\p{L})|%\s?\d+|\d+\s?(baz puan|puan)(?!\p{L})|\d+(?:[.,]\d+)?\s*(milyar|milyon|bin)?\s*(tl|lira|dolar|euro)(?!\p{L})|\d(?:[.,]\d)?\s*büyüklüğünde)/iu;
+
+const CLICKBAIT_PATTERN = /(?<![\p{L}\d])(şok\p{L}*|inanılmaz|bomba gibi|görenler\p{L}*|akılalmaz|damga vurdu|dikkat çekti|sosyal medyada gündem\p{L}*|viral\p{L}*|bakın ne)(?![\p{L}\d])/iu;
+
+export function hasHighImpactSignal(evidence: string): boolean {
+  return HIGH_IMPACT_PATTERN.test(evidence) || MAGNITUDE_PATTERN.test(evidence);
+}
+
 export function scoreCandidate(candidate: ContentCandidate, channel: Channel): CandidateScore {
   const evidence = `${candidate.title} ${candidate.summary}`;
+  const highImpactSignal = hasHighImpactSignal(evidence);
+  const magnitudeSignal = MAGNITUDE_PATTERN.test(evidence);
+  const clickbaitSignal = CLICKBAIT_PATTERN.test(evidence);
   const routineAnnouncement = /\b(kutladı|kutlama|tebrik|mesajı|hayırlı olsun|başarılar diledi|bereketli seferler|ziyaret etti|kabul etti)\b/iu.test(evidence)
-    && !/\b(karar|yasa|kanun|yönetmelik|yasak|zam|faiz|deprem|sel|yangın|saldırı|ölü|öldü|hayatını kaybetti|tutuklandı|istifa|seçim|kriz)\b/iu.test(evidence);
-  const highImpactSignal = /\b(son dakika|karar|yasa|kanun|yönetmelik|faiz|enflasyon|deprem|sel|yangın|saldırı|savaş|ölü|öldü|hayatını kaybetti|tahliye|tutuklandı|istifa|seçim|kriz|acil|rekor)\b/iu.test(evidence);
+    && !highImpactSignal;
   const verificationCount = candidate.verification?.sourceCount ?? 1;
   const freshness = candidate.freshnessStatus === 'today'
     ? 20
@@ -227,13 +241,17 @@ export function scoreCandidate(candidate: ContentCandidate, channel: Channel): C
     ? Math.min(20, Math.max(1, Math.round((candidate.score - 48) / 2.2)))
     : candidate.kind === 'trend'
       ? Math.min(20, Math.max(8, candidate.score - 70))
-      : highImpactSignal ? 10 : 3;
+      : (highImpactSignal ? 10 : 3) + (magnitudeSignal ? 2 : 0);
   const location = candidate.location;
   const channelFit = channel === 'international'
     ? 17
     : channel === 'history' ? 20 : location?.country === 'Türkiye' ? 20 : location ? 14 : 12;
   const imageReadiness = candidate.imageUrl ? 5 : 0;
-  const novelty = routineAnnouncement ? -12 : highImpactSignal ? 5 : 3;
+  const novelty = routineAnnouncement
+    ? -12
+    : clickbaitSignal && !highImpactSignal
+      ? -8
+      : highImpactSignal ? 5 : 3;
   const total = Math.min(100, freshness + trust + crossSource + trend + channelFit + imageReadiness + novelty);
   return {
     total,
@@ -262,6 +280,13 @@ export function enrichIntelligence(candidates: ContentCandidate[], channel: Chan
 
   return clustered.map((candidate) => {
     const scoreBreakdown = scoreCandidate(candidate, channel);
+    // Son dakika: akış kaynağı işaretlediyse ya da yüksek etkili + en az 2 kaynak + bugünse.
+    const breaking = candidate.breaking === true || (
+      hasHighImpactSignal(`${candidate.title} ${candidate.summary}`)
+      && (candidate.verification?.sourceCount ?? 1) >= 2
+      && candidate.freshnessStatus === 'today'
+    );
+    if (breaking) scoreBreakdown.total = Math.max(scoreBreakdown.total, 88);
     const readinessIssues = [
       candidate.freshnessStatus === 'unverified' ? 'Yayın tarihi doğrulanmadı.' : '',
       candidate.freshnessStatus === 'stale' ? 'Kaynak sayfası bugüne ait değil.' : '',
@@ -271,6 +296,7 @@ export function enrichIntelligence(candidates: ContentCandidate[], channel: Chan
     ].filter(Boolean);
     return {
       ...candidate,
+      breaking,
       score: scoreBreakdown.total,
       scoreBreakdown,
       sourceTrust: scoreBreakdown.sourceTrust,

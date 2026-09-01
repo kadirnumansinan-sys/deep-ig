@@ -247,6 +247,44 @@ function rssImage(item: RssItem): string {
   return isSafeHttpsUrl(fromDescription) ? fromDescription : '';
 }
 
+type AtomLink = { '@_href'?: unknown; '@_rel'?: unknown };
+type AtomEntry = {
+  title?: unknown;
+  id?: unknown;
+  link?: AtomLink | AtomLink[];
+  published?: unknown;
+  updated?: unknown;
+  summary?: unknown;
+  content?: unknown;
+  'media:content'?: RssImage | RssImage[];
+  'media:thumbnail'?: RssImage | RssImage[];
+};
+
+function atomToRssItem(entry: AtomEntry): RssItem {
+  const links = asArray(entry.link);
+  const alternate = links.find((link) => {
+    const rel = text(link?.['@_rel']);
+    return !rel || rel === 'alternate';
+  }) || links[0];
+  return {
+    title: entry.title,
+    link: alternate ? text(alternate['@_href']) : '',
+    guid: entry.id,
+    pubDate: text(entry.published) || text(entry.updated),
+    description: entry.summary ?? entry.content,
+    'media:content': entry['media:content'],
+    'media:thumbnail': entry['media:thumbnail'],
+  };
+}
+
+// RSS 2.0 ve Atom akışlarını tek biçime indirger (NTV Atom yayınlar).
+function feedItems(data: Record<string, unknown>): RssItem[] {
+  const rss = data.rss as { channel?: { item?: RssItem | RssItem[] } } | undefined;
+  if (rss?.channel?.item) return asArray(rss.channel.item);
+  const atom = data.feed as { entry?: AtomEntry | AtomEntry[] } | undefined;
+  return asArray(atom?.entry).map(atomToRssItem);
+}
+
 async function parseGoogleNewsFeed(
   url: string,
   language: PublicationLanguage,
@@ -324,7 +362,7 @@ async function getGoogleNews(channel: Exclude<Channel, 'history'>): Promise<Cont
   return results.flatMap((result) => result.status === 'fulfilled' ? result.value : []);
 }
 
-type PublisherFeed = { url: string; sourceName: string; language: PublicationLanguage };
+type PublisherFeed = { url: string; sourceName: string; language: PublicationLanguage; breaking?: boolean };
 type PublisherGroup = { id: string; label: string; feeds: PublisherFeed[] };
 
 function publisherGroups(channel: Exclude<Channel, 'history'>): PublisherGroup[] {
@@ -377,6 +415,34 @@ function publisherGroups(channel: Exclude<Channel, 'history'>): PublisherGroup[]
           language: 'en',
         }],
       },
+      {
+        id: 'sky-rss',
+        label: 'Sky News · doğrudan RSS',
+        feeds: [{
+          url: 'https://feeds.skynews.com/feeds/rss/world.xml',
+          sourceName: 'Sky News',
+          language: 'en',
+        }],
+      },
+      {
+        id: 'france24-rss',
+        label: 'France 24 · doğrudan RSS',
+        feeds: [{
+          url: 'https://www.france24.com/en/rss',
+          sourceName: 'France 24',
+          language: 'en',
+        }],
+      },
+      {
+        id: 'cnn-rss',
+        label: 'CNN International · doğrudan RSS',
+        feeds: [{
+          // Eski http uç noktası; https sürümü TLS hatası veriyor (sunucudan çekildiği için güvenli).
+          url: 'http://rss.cnn.com/rss/edition_world.rss',
+          sourceName: 'CNN',
+          language: 'en',
+        }],
+      },
     ];
   }
   const trtNames = channel === 'news'
@@ -388,6 +454,65 @@ function publisherGroups(channel: Exclude<Channel, 'history'>): PublisherGroup[]
   const aaNames = channel === 'news'
     ? ['guncel', 'politika', 'ekonomi']
     : ['yasam', 'kultur-sanat', 'bilim-teknoloji', 'saglik'];
+  const turkishExtras: PublisherGroup[] = [
+    {
+      id: 'cumhuriyet-rss',
+      label: 'Cumhuriyet · doğrudan RSS',
+      feeds: [{
+        url: 'https://www.cumhuriyet.com.tr/rss',
+        sourceName: 'Cumhuriyet',
+        language: 'tr',
+      }],
+    },
+    {
+      id: 'dw-tr-rss',
+      label: 'DW Türkçe · doğrudan RSS',
+      feeds: [{
+        url: 'https://rss.dw.com/xml/rss-tur-all',
+        sourceName: 'DW Türkçe',
+        language: 'tr',
+      }],
+    },
+    {
+      id: 'bbc-tr-rss',
+      label: 'BBC Türkçe · doğrudan RSS',
+      feeds: [{
+        url: 'https://feeds.bbci.co.uk/turkce/rss.xml',
+        sourceName: 'BBC Türkçe',
+        language: 'tr',
+      }],
+    },
+  ];
+  const newsOnlyExtras: PublisherGroup[] = channel === 'news'
+    ? [
+      {
+        id: 'ntv-rss',
+        label: 'NTV · doğrudan RSS',
+        feeds: [
+          {
+            url: 'https://www.ntv.com.tr/son-dakika.rss',
+            sourceName: 'NTV',
+            language: 'tr',
+            breaking: true,
+          },
+          {
+            url: 'https://www.ntv.com.tr/turkiye.rss',
+            sourceName: 'NTV',
+            language: 'tr',
+          },
+        ],
+      },
+      {
+        id: 'sozcu-rss',
+        label: 'Sözcü · doğrudan RSS',
+        feeds: [{
+          url: 'https://www.sozcu.com.tr/rss/gundem.xml',
+          sourceName: 'Sözcü',
+          language: 'tr',
+        }],
+      },
+    ]
+    : [];
   return [
     {
       id: 'trt-rss',
@@ -396,6 +521,7 @@ function publisherGroups(channel: Exclude<Channel, 'history'>): PublisherGroup[]
         url: `https://www.trthaber.com/${name}_articles.rss`,
         sourceName: 'TRT Haber',
         language: 'tr' as const,
+        breaking: name === 'sondakika',
       })),
     },
     {
@@ -416,13 +542,14 @@ function publisherGroups(channel: Exclude<Channel, 'history'>): PublisherGroup[]
         language: 'tr' as const,
       })),
     },
+    ...newsOnlyExtras,
+    ...turkishExtras,
   ];
 }
 
 async function parsePublisherFeed(feed: PublisherFeed): Promise<ContentCandidate[]> {
   const data = await fetchXml(feed.url);
-  const rss = data.rss as { channel?: { item?: RssItem | RssItem[] } } | undefined;
-  return asArray(rss?.channel?.item)
+  return feedItems(data)
     .filter((item) => isTodayish(text(item.pubDate)))
     .slice(0, PUBLISHER_FEED_ITEMS_PER_SOURCE)
     .flatMap((item, index) => {
@@ -447,7 +574,8 @@ async function parsePublisherFeed(feed: PublisherFeed): Promise<ContentCandidate
         freshnessStatus: 'today' as const,
         sourceType: 'publisher' as const,
         score: Math.max(58, 88 - Math.floor(index / 4)),
-        signal: 'Kaynak RSS · bugün doğrulandı',
+        breaking: feed.breaking === true,
+        signal: feed.breaking ? 'Son dakika akışı · bugün doğrulandı' : 'Kaynak RSS · bugün doğrulandı',
       }];
     });
 }
@@ -696,8 +824,9 @@ async function discover(channel: Channel): Promise<DiscoveryResponse> {
   const candidates = signedCandidates(
     deduplicateCandidates(enrichIntelligence(combined, channel))
       .sort((left, right) => {
+        const breakingDelta = Number(right.breaking === true) - Number(left.breaking === true);
         const freshnessDelta = Number(right.freshnessStatus === 'today') - Number(left.freshnessStatus === 'today');
-        return freshnessDelta * 20 || right.score - left.score;
+        return breakingDelta * 40 || freshnessDelta * 20 || right.score - left.score;
       })
       .slice(0, 100),
   );

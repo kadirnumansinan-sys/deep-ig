@@ -5,7 +5,9 @@ import { mergeGroqAnalysis } from '@/lib/groq';
 import {
   clusterCandidates,
   detectLocation,
+  enrichIntelligence,
   freshnessFor,
+  hasHighImpactSignal,
   scoreCandidate,
   titleSimilarity,
 } from '@/lib/news-intelligence';
@@ -88,6 +90,68 @@ test('rutin protokol açıklaması yüksek etkili gelişmenin önüne geçmez', 
     summary: 'Yönetmelik bugün yürürlüğe girdi ve milyonlarca kişiyi ilgilendiriyor.',
   });
   assert.ok(scoreCandidate(routine, 'news').total < scoreCandidate(critical, 'news').total);
+});
+
+test('sayısal büyüklük işareti skoru kontrol grubuna göre yükseltir', () => {
+  const control = candidate({
+    title: 'Kentte toplantı yapıldı',
+    summary: 'Yetkililer gündemi değerlendirdi.',
+  });
+  const magnitude = candidate({
+    title: 'Kentte kaza: 3 ölü, 12 yaralı',
+    summary: 'Yetkililer olay yerinde inceleme başlattı.',
+  });
+  assert.ok(hasHighImpactSignal(`${magnitude.title} ${magnitude.summary}`));
+  assert.ok(scoreCandidate(magnitude, 'news').total > scoreCandidate(control, 'news').total);
+});
+
+test('etkisiz clickbait başlık puan kaybeder', () => {
+  const control = candidate({
+    title: 'Kentte yeni sergi açıldı',
+    summary: 'Sanatseverler açılışta buluştu.',
+  });
+  const clickbait = candidate({
+    title: 'Görenler inanamadı, sosyal medyada gündem oldu',
+    summary: 'Paylaşım kısa sürede viral hale geldi.',
+  });
+  assert.ok(scoreCandidate(clickbait, 'news').novelty < scoreCandidate(control, 'news').novelty);
+});
+
+test('doğrulanmış yüksek etkili aday son dakika işareti ve 88 taban puanı alır', () => {
+  const enriched = enrichIntelligence([
+    candidate({
+      id: 'x',
+      sourceName: 'Kaynak A',
+      title: 'Bakanlık yeni deprem kararı açıkladı',
+      summary: 'Karar bugün yürürlüğe girdi.',
+      publishedAt: new Date().toISOString(),
+      freshnessStatus: 'today',
+    }),
+    candidate({
+      id: 'y',
+      sourceName: 'Kaynak B',
+      title: 'Bakanlık deprem kararını açıkladı',
+      summary: 'Karar bugün yürürlüğe girdi.',
+      publishedAt: new Date().toISOString(),
+      freshnessStatus: 'today',
+    }),
+  ], 'news');
+  assert.equal(enriched[0].breaking, true);
+  assert.ok(enriched[0].score >= 88);
+});
+
+test('akıştan gelen son dakika bayrağı tek kaynakta da korunur', () => {
+  const enriched = enrichIntelligence([
+    candidate({
+      breaking: true,
+      verification: undefined,
+      title: 'Kentte yeni sergi açıldı',
+      summary: 'Sanatseverler açılışta buluştu.',
+      freshnessStatus: 'today',
+    }),
+  ], 'news');
+  assert.equal(enriched[0].breaking, true);
+  assert.ok(enriched[0].score >= 88);
 });
 
 test('Groq hiçbir adayı düşürmez ve en fazla sekiz puan dikkat bonusu verir', () => {

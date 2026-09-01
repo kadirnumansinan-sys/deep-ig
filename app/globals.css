@@ -443,6 +443,17 @@ button { color: inherit; }
   letter-spacing: 0.75px;
 }
 .candidate-meta i { color: #777980; font-size: 8px; font-style: normal; }
+.candidate-meta .breaking-badge {
+  background: #9c2028;
+  border-radius: 4px;
+  color: #fff;
+  flex: 0 0 auto;
+  font-size: 7px;
+  letter-spacing: 0.5px;
+  margin-right: 4px;
+  padding: 2px 4px;
+}
+.candidate-card.is-breaking { border-color: #e3b6ba; }
 .candidate-badges { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 5px; }
 .candidate-badges i {
   align-items: center;

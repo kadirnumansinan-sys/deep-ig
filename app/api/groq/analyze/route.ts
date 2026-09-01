@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as { channel?: Channel; candidates?: ContentCandidate[] };
     const channel = body.channel;
-    const candidates = Array.isArray(body.candidates) ? body.candidates.slice(0, 12) : [];
+    const candidates = Array.isArray(body.candidates) ? body.candidates.slice(0, 24) : [];
     if (!channel || !channels.has(channel)) {
       return NextResponse.json({ error: 'Geçersiz kanal.' }, { status: 400 });
     }
@@ -26,7 +26,17 @@ export async function POST(request: Request) {
         headers: { 'Cache-Control': 'no-store' },
       });
     }
-    const analyses = await analyzeCandidatesWithGroq(channel, candidates);
+    // Model başına 12 aday sınırı: 24 aday iki sıralı grupta analiz edilir.
+    const batches = [candidates.slice(0, 12), candidates.slice(12, 24)].filter((batch) => batch.length > 0);
+    const analyses = await analyzeCandidatesWithGroq(channel, batches[0]);
+    if (batches.length > 1) {
+      try {
+        const second = await analyzeCandidatesWithGroq(channel, batches[1]);
+        second.forEach((value, key) => analyses.set(key, value));
+      } catch {
+        // İkinci grup başarısız olursa ilk grubun sonuçları yine döner.
+      }
+    }
     return NextResponse.json({
       candidates: mergeGroqAnalysis(candidates, analyses),
       analyzed: analyses.size,
