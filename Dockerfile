@@ -24,7 +24,7 @@ RUN addgroup --system --gid 1001 deepbrief \
   && mkdir -p /data \
   && chown deepbrief:deepbrief /data
 
-COPY --from=builder --chown=deepbrief:deepbrief /app/dist ./dist
+COPY --from=builder --chown=deepbrief:deepbrief /app/.next ./.next
 COPY --from=builder --chown=deepbrief:deepbrief /app/node_modules ./node_modules
 COPY --from=builder --chown=deepbrief:deepbrief /app/package.json ./package.json
 

@@ -6,9 +6,9 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "vinext dev",
-    "build": "vinext build",
-    "start": "node --experimental-sqlite node_modules/vinext/dist/cli.js start",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "node --experimental-sqlite node_modules/next/dist/bin/next start",
     "lint": "eslint app components lib vite.config.ts next.config.ts",
     "test": "node --experimental-sqlite --import tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit"
