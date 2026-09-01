@@ -47,6 +47,30 @@ export function istanbulNowDate(): string {
   return istanbulDate(new Date());
 }
 
+function parseDate(value: string): Date | null {
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+export function isTodayIstanbul(value: string, now: Date | string = new Date()): boolean {
+  const parsed = parseDate(value);
+  if (!parsed) return false;
+  return istanbulDate(parsed) === istanbulDate(now instanceof Date ? now : new Date(now));
+}
+
+export function isRecentHours(
+  value: string,
+  hours: number,
+  now: Date | string = new Date(),
+): boolean {
+  const parsed = parseDate(value);
+  if (!parsed) return false;
+  const current = now instanceof Date ? now.getTime() : new Date(now).getTime();
+  const delta = current - parsed.getTime();
+  const limitMs = hours * 60 * 60_000;
+  return Number.isFinite(delta) && delta >= 0 && delta <= limitMs;
+}
+
 export function freshnessFor(
   publishedAt: string,
   modifiedAt = '',

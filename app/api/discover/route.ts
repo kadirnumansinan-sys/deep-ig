@@ -16,6 +16,8 @@ import {
   enrichIntelligence,
   istanbulDate,
   istanbulNowDate,
+  isRecentHours,
+  isTodayIstanbul,
 } from '@/lib/news-intelligence';
 import { isSafeHttpsUrl, signUrl } from '@/lib/url-signing';
 
@@ -34,6 +36,23 @@ type SourceResult = {
 
 const discoveryCache = new Map<Channel, { expiresAt: number; payload: DiscoveryResponse }>();
 const sourceCache = new Map<string, { expiresAt: number; candidates: ContentCandidate[] }>();
+
+function positiveInteger(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value || '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const GOOGLE_NEWS_ITEMS_PER_FEED = positiveInteger(process.env.DISCOVERY_GOOGLE_NEWS_ITEMS, 100);
+const PUBLISHER_FEED_ITEMS_PER_SOURCE = positiveInteger(process.env.DISCOVERY_PUBLISHER_FEED_ITEMS, 120);
+const GDELT_MAX_RECORDS = positiveInteger(process.env.DISCOVERY_GDELT_MAX_RECORDS, 180);
+const DISCOVERY_RECENT_HOURS = positiveInteger(process.env.DISCOVERY_RECENT_HOURS, 0);
+
+function isTodayish(value: string): boolean {
+  if (!value) return false;
+  if (isTodayIstanbul(value)) return true;
+  if (DISCOVERY_RECENT_HOURS <= 0) return false;
+  return isRecentHours(value, DISCOVERY_RECENT_HOURS, new Date());
+}
 
 function asArray<T>(value: T | T[] | undefined): T[] {
   if (value === undefined) return [];
@@ -166,9 +185,8 @@ function trendLeadScore(article: TrendNewsItem): number {
 async function getTrends(language: PublicationLanguage): Promise<ContentCandidate[]> {
   const data = await fetchXml('https://trends.google.com/trending/rss?geo=TR');
   const rss = data.rss as { channel?: { item?: TrendItem | TrendItem[] } } | undefined;
-  const today = istanbulNowDate();
   return asArray(rss?.channel?.item)
-    .filter((item) => istanbulDate(text(item.pubDate)) === today)
+    .filter((item) => isTodayish(text(item.pubDate)))
     .flatMap((item, index) => {
       const related = asArray(item['ht:news_item'] as TrendNewsItem | TrendNewsItem[] | undefined);
       const lead = related
@@ -236,10 +254,9 @@ async function parseGoogleNewsFeed(
 ): Promise<ContentCandidate[]> {
   const data = await fetchXml(url);
   const rss = data.rss as { channel?: { item?: RssItem | RssItem[] } } | undefined;
-  const today = istanbulNowDate();
   return asArray(rss?.channel?.item)
-    .filter((item) => istanbulDate(text(item.pubDate)) === today)
-    .slice(0, 40)
+    .filter((item) => isTodayish(text(item.pubDate)))
+    .slice(0, GOOGLE_NEWS_ITEMS_PER_FEED)
     .flatMap((item, index) => {
       const rawTitle = text(item.title);
       const sourceName = text(item.source) || rawTitle.split(' - ').at(-1) || 'Google News';
@@ -271,7 +288,7 @@ async function parseGoogleNewsFeed(
 function googleNewsUrls(channel: Exclude<Channel, 'history'>): string[] {
   if (channel === 'international') {
     const locale = 'hl=en-US&gl=US&ceid=US:en';
-    return ['', 'WORLD', 'BUSINESS', 'TECHNOLOGY', 'HEALTH', 'SCIENCE'].map((topic) => topic
+    return ['', 'WORLD', 'BUSINESS', 'TECHNOLOGY', 'HEALTH', 'SCIENCE', 'ENTERTAINMENT'].map((topic) => topic
       ? `https://news.google.com/rss/headlines/section/topic/${topic}?${locale}`
       : `https://news.google.com/rss?${locale}`);
   }
@@ -351,6 +368,15 @@ function publisherGroups(channel: Exclude<Channel, 'history'>): PublisherGroup[]
           language: 'en',
         }],
       },
+      {
+        id: 'reuters-rss',
+        label: 'Reuters · doğrudan RSS',
+        feeds: [{
+          url: 'https://www.reuters.com/world/feed/',
+          sourceName: 'Reuters',
+          language: 'en',
+        }],
+      },
     ];
   }
   const trtNames = channel === 'news'
@@ -396,10 +422,9 @@ function publisherGroups(channel: Exclude<Channel, 'history'>): PublisherGroup[]
 async function parsePublisherFeed(feed: PublisherFeed): Promise<ContentCandidate[]> {
   const data = await fetchXml(feed.url);
   const rss = data.rss as { channel?: { item?: RssItem | RssItem[] } } | undefined;
-  const today = istanbulNowDate();
   return asArray(rss?.channel?.item)
-    .filter((item) => istanbulDate(text(item.pubDate)) === today)
-    .slice(0, 60)
+    .filter((item) => isTodayish(text(item.pubDate)))
+    .slice(0, PUBLISHER_FEED_ITEMS_PER_SOURCE)
     .flatMap((item, index) => {
       const sourceUrl = text(item.link) || text(item.guid);
       const title = stripSourceAttribution(text(item.title), feed.sourceName);
@@ -449,7 +474,7 @@ async function getGdelt(channel: Exclude<Channel, 'history'>): Promise<ContentCa
   const params = new URLSearchParams({
     query,
     mode: 'artlist',
-    maxrecords: '100',
+    maxrecords: String(GDELT_MAX_RECORDS),
     timespan: '24h',
     sort: channel === 'international' ? 'hybridrel' : 'datedesc',
     format: 'json',
@@ -462,9 +487,8 @@ async function getGdelt(channel: Exclude<Channel, 'history'>): Promise<ContentCa
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const data = await response.json() as { articles?: GdeltArticle[] };
   const language: PublicationLanguage = channel === 'international' ? 'en' : 'tr';
-  const today = istanbulNowDate();
   return asArray(data.articles)
-    .filter((article) => istanbulDate(article.seendate || '') === today)
+    .filter((article) => isTodayish(article.seendate || ''))
     .flatMap((article, index) => {
       const sourceUrl = article.url || article.url_mobile || '';
       const sourceName = article.domain?.trim() || 'GDELT';

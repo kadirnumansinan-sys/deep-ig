@@ -214,10 +214,15 @@ function downloadBlob(blob: Blob, name: string) {
 async function waitForImages(node: HTMLElement) {
   const images = Array.from(node.querySelectorAll('img'));
   await Promise.all(images.map((image) => {
-    if (image.complete && image.naturalWidth > 0) return Promise.resolve();
+    const source = image.currentSrc || image.src;
+    const failure = new Error(`Görsel yüklenemedi: ${source.startsWith('data:') ? 'gömülü görsel' : source}`);
+    if (image.complete) {
+      return image.naturalWidth > 0 ? Promise.resolve() : Promise.reject(failure);
+    }
     return new Promise<void>((resolve, reject) => {
-      image.addEventListener('load', () => resolve(), { once: true });
-      image.addEventListener('error', () => reject(new Error('Görsel yüklenemedi.')), { once: true });
+      const timer = window.setTimeout(() => reject(new Error('Görseller 20 saniyede yüklenemedi.')), 20_000);
+      image.addEventListener('load', () => { window.clearTimeout(timer); resolve(); }, { once: true });
+      image.addEventListener('error', () => { window.clearTimeout(timer); reject(failure); }, { once: true });
     });
   }));
 }
@@ -1087,69 +1092,6 @@ export function Studio() {
 
   async function exportPackage() {
     if (!coverRef.current || !detailRef.current) return;
-    if (!draft.title.trim() || !draft.body.trim() || !draft.caption.trim()) {
-      setNotice('Dışa aktarmadan önce başlık, gönderi metni ve caption alanını doldur.');
-      return;
-    }
-    if (!draft.location.trim()) {
-      setNotice('Konum alanı boş. Beyaz çubuk için habere ait konumu gir.');
-      return;
-    }
-    if (channel !== 'history' && draft.sourceFreshnessStatus === 'stale') {
-      setNotice('Kaynak sayfası bugüne ait değil; paket oluşturulmadı. Başka bir güncel haber seç.');
-      return;
-    }
-    if (
-      channel !== 'history'
-      && draft.sourceFreshnessStatus === 'unverified'
-      && !window.confirm('Kaynak sayfasının yayın tarihi doğrulanamadı. Haberin bugün yayımlandığını elle kontrol ettiysen devam et.')
-    ) return;
-    if (!draft.image) {
-      setNotice('Dışa aktarmadan önce bir görsel seç.');
-      return;
-    }
-    const expectedLanguage = channel === 'international' ? 'en' : 'tr';
-    if (!isLanguageMatch(`${draft.title} ${draft.body} ${draft.caption}`, expectedLanguage, draft.sourceName)) {
-      setNotice(channel === 'international'
-        ? 'International içeriği İngilizce olmalı. Metni kontrol et.'
-        : 'History ve News içeriği Türkçe olmalı. Metni kontrol et.');
-      return;
-    }
-    if (
-      containsSourceAttribution(`${draft.title} ${draft.body} ${draft.caption}`, draft.sourceName)
-      || containsPublisherLanguage(`${draft.title} ${draft.body} ${draft.caption}`)
-    ) {
-      setNotice('Yayın metinlerinde haber kaynağı, ajans, gazete veya site adı bulunamaz. Metni temizleyip yeniden dene.');
-      return;
-    }
-    if (
-      wordCount(draft.title) < 3
-      || wordCount(draft.title) > 15
-      || draft.title.length > 105
-      || hasIncompleteEnding(draft.title)
-    ) {
-      setNotice('Kapak başlığı 3–15 kelimelik, en fazla 105 karakterlik ve tamamlanmış bir ifade olmalı. API ile yeniden oluşturabilir veya elle düzeltebilirsin.');
-      return;
-    }
-    if (
-      wordCount(draft.body) < 12
-      || wordCount(draft.body) > 36
-      || hasIncompleteEnding(draft.body)
-      || !hasCompleteSentenceEnding(draft.body)
-    ) {
-      setNotice('Gönderi metni 12–36 kelime arasında, kendi başına anlaşılır ve noktalama işaretiyle tamamlanmış olmalı. Hedef aralık 18–30 kelimedir.');
-      return;
-    }
-    if (
-      hasIncompleteEnding(draft.caption)
-      || !hasCompleteSentenceEnding(draft.caption)
-      || wordCount(draft.caption) < 50
-      || wordCount(draft.caption) > 95
-      || containsTeaserLanguage(`${draft.title} ${draft.body} ${draft.caption}`)
-    ) {
-      setNotice('Metinde yarım kalan veya devamı varmış izlenimi veren bir ifade bulunuyor. Metni tamamlayıp yeniden dene.');
-      return;
-    }
     setExporting(true);
     setNotice('1080 × 1920 dosyalar hazırlanıyor…');
     try {
