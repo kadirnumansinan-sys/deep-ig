@@ -718,7 +718,7 @@ button { color: inherit; }
   user-select: none;
   width: 100%;
 }
-.cover-overlay-art, .detail-overlay-art { z-index: 1; }
+.cover-overlay-art, .detail-overlay-art, .rail-artwork { z-index: 1; }
 .cover-brand-art {
   height: auto;
   left: 0;
@@ -795,26 +795,23 @@ button { color: inherit; }
 }
 .rail-location-art, .rail-wordmark-art {
   color: #111217;
+  font-size: 2.3cqw;
   font-weight: 750;
-  left: 8.95%;
+  left: 10.1cqw;
+  line-height: 1;
   position: absolute;
+  transform: rotate(-90deg);
+  transform-origin: 0 100%;
   white-space: nowrap;
   z-index: 4;
 }
 .rail-location-art {
-  font-size: 2.05cqw;
-  max-width: 55cqw;
+  bottom: 36cqw;
+  max-width: 74cqw;
   overflow: hidden;
   text-overflow: ellipsis;
-  top: 71.5%;
-  transform: rotate(-90deg);
-  transform-origin: 0 50%;
 }
-.rail-wordmark-art {
-  font-size: 1.62cqw;
-  top: 82%;
-  transform: translate(-50%, -50%) rotate(-90deg);
-}
+.rail-wordmark-art { bottom: 18cqw; }
 .detail-copy {
   bottom: 9.5%;
   color: white;

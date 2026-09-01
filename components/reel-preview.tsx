@@ -40,26 +40,27 @@ const coverOverlays: Record<Channel, string> = {
   history: '/assets/deepbrief/overlays/history-cover-gradient-hd.png',
   news: '/assets/deepbrief/overlays/news-red-gradient.png',
   international: '/assets/deepbrief/overlays/news-red-gradient.png',
-  media: '/assets/deepbrief/overlays/news-red-gradient.png',
+  media: '/assets/deepbrief/overlays/history-cover-gradient-hd.png',
 };
 
 const detailOverlays: Record<Channel, string> = {
   history: '/assets/deepbrief/overlays/history-detail-gradient-hd.png',
   news: '/assets/deepbrief/overlays/news-red-gradient.png',
   international: '/assets/deepbrief/overlays/news-red-gradient.png',
-  media: '/assets/deepbrief/overlays/news-red-gradient.png',
+  media: '/assets/deepbrief/overlays/history-detail-gradient-hd.png',
 };
 
 const railArtwork: Record<Channel, string> = {
   history: '/assets/deepbrief/rails/deepbrief-detail-rail.png',
   news: '/assets/deepbrief/rails/deepbrief-news-detail-rail.png',
-  international: '/assets/deepbrief/rails/deepbrief-detail-rail.png',
+  international: '/assets/deepbrief/rails/deepbrief-news-detail-rail.png',
   media: '/assets/deepbrief/rails/deepbrief-detail-rail.png',
 };
 
 const railAvatars: Partial<Record<Channel, string>> = {
   history: '/assets/deepbrief/brand/deepbrief-history-avatar.jpg',
   news: '/assets/deepbrief/brand/deepbrief-news-avatar.jpg',
+  international: '/assets/deepbrief/brand/deepbrief-news-avatar.jpg',
   media: '/assets/deepbrief/brand/deepbrief-media-avatar.jpg',
 };
 
@@ -143,6 +144,10 @@ export function ReelPreview({ channel, draft, coverRef, detailRef }: PreviewProp
               <Artwork className="today-lockup-art" src="/assets/deepbrief/brand/tarihte-bugun-lockup.png" />
             )}
             <Artwork className="rail-artwork" src={railArtwork[channel]} />
+            <svg className="rail-icon rail-icon-chat" viewBox="0 0 26 22" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" strokeLinecap="round" aria-hidden="true">
+              <path d="M2 20.5V6a4 4 0 0 1 4-4h14a4 4 0 0 1 4 4v7a4 4 0 0 1-4 4H7.5L2 20.5Z" />
+              <path d="M7.5 7.5h11M7.5 11.5h7" />
+            </svg>
             {railAvatars[channel] && <Artwork className="rail-channel-avatar" src={railAvatars[channel]} />}
             <span className="rail-location-art">{draft.location || 'KONUM GİRİLMEDİ'}</span>
             <span className="rail-wordmark-art">Deepbrief</span>
