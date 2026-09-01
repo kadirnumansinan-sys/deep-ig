@@ -28,9 +28,7 @@ import type {
 } from '@/lib/content';
 import {
   completeExcerpt,
-  containsTeaserLanguage,
   containsPublisherLanguage,
-  containsSourceAttribution,
   hasCompleteSentenceEnding,
   hasIncompleteEnding,
   hasRepeatedPhrase,
@@ -298,6 +296,47 @@ async function prepareUpscaleBlob(blob: Blob): Promise<Blob> {
   });
 }
 
+async function upscaleBlobLocally(blob: Blob): Promise<{ blob: Blob; width: number; height: number } | null> {
+  if (typeof createImageBitmap !== 'function') return null;
+  const source = await createImageBitmap(blob);
+  // En fazla 2x: bikübik büyütme detay eklemez, aşırı büyütme bulanıklaştırır.
+  const scale = Math.min(2, minimumImageWidth / source.width, 1920 / source.height);
+  if (scale <= 1.01) {
+    source.close();
+    return null;
+  }
+  const width = Math.round(source.width * scale);
+  const height = Math.round(source.height * scale);
+
+  let resized: ImageBitmap | null = null;
+  try {
+    resized = await createImageBitmap(blob, { resizeWidth: width, resizeHeight: height, resizeQuality: 'high' });
+  } catch {
+    resized = null;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) {
+    source.close();
+    resized?.close();
+    return null;
+  }
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
+  context.drawImage(resized ?? source, 0, 0, width, height);
+  source.close();
+  resized?.close();
+
+  const result = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob((value) => resolve(value), 'image/webp', 0.95);
+  });
+  if (!result) return null;
+  return { blob: result, width, height };
+}
+
 type EnrichmentResponse = {
   imageUrl?: string;
   imageToken?: string;
@@ -459,6 +498,7 @@ export function Studio() {
   const [exporting, setExporting] = useState(false);
   const [enrichingId, setEnrichingId] = useState('');
   const [upscaling, setUpscaling] = useState(false);
+  const [localEnhancing, setLocalEnhancing] = useState(false);
   const [upscaleConfigured, setUpscaleConfigured] = useState<boolean | null>(null);
   const [upscaleUsage, setUpscaleUsage] = useState<ProviderUsage | null>(null);
   const [generatingCopy, setGeneratingCopy] = useState(false);
@@ -762,24 +802,23 @@ export function Studio() {
 
   useEffect(() => {
     if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(''), 3600);
+    const timer = window.setTimeout(() => setNotice(''), notice.length > 140 ? 6500 : 3600);
     return () => window.clearTimeout(timer);
   }, [notice]);
 
   async function selectCandidate(candidate: ContentCandidate) {
     const targetChannel = channel;
+    const warnings: string[] = [];
     if (candidate.freshnessStatus === 'stale') {
-      setNotice('Bu haber kaynak sayfasında bugüne ait görünmüyor; taslağa alınmadı.');
-      return;
+      warnings.push('Kaynak sayfası bugüne ait görünmüyor — tarihi kontrol et.');
     }
     const expectedLanguage = targetChannel === 'international' ? 'en' : 'tr';
     const cleanCandidateTitle = stripSourceAttribution(candidate.title, candidate.sourceName);
     const cleanCandidateSummary = stripSourceAttribution(candidate.summary, candidate.sourceName);
     if (!isLanguageMatch(`${cleanCandidateTitle} ${cleanCandidateSummary}`, expectedLanguage, candidate.sourceName)) {
-      setNotice(targetChannel === 'international'
-        ? 'Bu kaynak İngilizce değil; taslağa alınmadı.'
-        : 'Bu kaynak Türkçe değil; taslağa alınmadı.');
-      return;
+      warnings.push(targetChannel === 'international'
+        ? 'Metin İngilizce görünmüyor — kontrol et.'
+        : 'Metin Türkçe görünmüyor — kontrol et.');
     }
 
     const requestId = selectionRequestRef.current + 1;
@@ -834,6 +873,8 @@ export function Studio() {
           const enrichedTitle = stripSourceAttribution(body.title?.trim() || cleanCandidateTitle, candidate.sourceName);
           const enrichedSummary = stripSourceAttribution(body.description?.trim() || cleanCandidateSummary, candidate.sourceName);
           const combinedEvidence = `${enrichedTitle} ${enrichedSummary}`;
+          // Dil kontrolü burada bilinçli olarak kalır: yabancı dilde cookie/boilerplate
+          // metninin taslaktaki kaynak metnin üzerine yazılmasını engeller.
           if (isLanguageMatch(combinedEvidence, expectedLanguage, candidate.sourceName)) {
             setDrafts((current) => ({
               ...current,
@@ -886,11 +927,12 @@ export function Studio() {
           imageHeight: best.height,
         },
       }));
-      setNotice(isPublicationQuality(best.width, best.height)
+      const successNotice = isPublicationQuality(best.width, best.height)
         ? `${best.width} × ${best.height}px görsel ${best.origin} üzerinden alındı. Konumu girip metni kontrol et.`
-        : `${best.width} × ${best.height}px görsel ${best.origin} üzerinden eklendi. İstersen “Görsel kalitesini artır” düğmesini kullanabilirsin.`);
+        : `${best.width} × ${best.height}px görsel ${best.origin} üzerinden eklendi. İstersen “Görsel kalitesini artır” düğmesini kullanabilirsin.`;
+      setNotice([successNotice, ...warnings].join(' '));
     } else {
-      setNotice('Kaynakta kullanılabilir görsel bulunamadı. Kendi görselini yükleyebilirsin.');
+      setNotice(['Kaynakta kullanılabilir görsel bulunamadı. Kendi görselini yükleyebilirsin.', ...warnings].join(' '));
     }
     setEnrichingId('');
   }
@@ -1030,6 +1072,42 @@ export function Studio() {
         .then((response) => response.json() as Promise<CopyStatus>)
         .then((status) => setCopyUsage(status.usage || null))
         .catch(() => undefined);
+    }
+  }
+
+  async function enhanceImageLocally() {
+    if (!draft.image) {
+      setNotice('Önce bir görsel seç veya yükle.');
+      return;
+    }
+    if (isPublicationQuality(draft.imageWidth, draft.imageHeight)) {
+      setNotice('Görsel zaten yeterli çözünürlükte; iyileştirme gerekmiyor.');
+      return;
+    }
+    const targetChannel = channel;
+    setLocalEnhancing(true);
+    setNotice('Görsel tarayıcıda yüksek kaliteyle yeniden örnekleniyor…');
+    try {
+      const sourceResponse = await fetch(draft.image, { cache: 'no-store' });
+      if (!sourceResponse.ok) throw new Error('Kaynak görsel indirilemedi.');
+      const upscaled = await upscaleBlobLocally(await sourceResponse.blob());
+      if (!upscaled) throw new Error('Bu görsel yerel olarak büyütülemedi.');
+      const dataUrl = await blobToDataUrl(upscaled.blob);
+      const size = await measureImage(dataUrl);
+      setDrafts((current) => ({
+        ...current,
+        [targetChannel]: {
+          ...current[targetChannel],
+          image: dataUrl,
+          imageWidth: size.width,
+          imageHeight: size.height,
+        },
+      }));
+      setNotice(`Görsel ücretsiz yerel yöntemle ${size.width} × ${size.height}px boyutuna yükseltildi.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Görsel yerel olarak iyileştirilemedi.');
+    } finally {
+      setLocalEnhancing(false);
     }
   }
 
@@ -1354,19 +1432,37 @@ export function Studio() {
             </div>
             <button
               className="upscale-button"
-              disabled={!draft.image || upscaling || upscaleConfigured !== true}
+              disabled={!draft.image || localEnhancing || upscaling || isPublicationQuality(draft.imageWidth, draft.imageHeight)}
+              onClick={() => void enhanceImageLocally()}
+              type="button"
+            >
+              {localEnhancing ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
+              <span>
+                <strong>{localEnhancing ? 'İyileştiriliyor…' : 'Kaliteyi iyileştir (ücretsiz)'}</strong>
+                <small>
+                  {draft.image && isPublicationQuality(draft.imageWidth, draft.imageHeight)
+                    ? 'Görsel zaten yeterli çözünürlükte'
+                    : 'Yerel yüksek kaliteli yeniden örnekleme · ücretsiz'}
+                </small>
+              </span>
+            </button>
+            <button
+              className="upscale-button"
+              disabled={!draft.image || upscaling || localEnhancing || upscaleConfigured !== true || isPublicationQuality(draft.imageWidth, draft.imageHeight)}
               onClick={() => void upscaleImage()}
               type="button"
             >
               {upscaling ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
               <span>
-                <strong>{upscaling ? 'Kalite artırılıyor…' : 'Görsel kalitesini artır'}</strong>
+                <strong>{upscaling ? 'Kalite artırılıyor…' : 'AI ile iyileştir (OpenAI)'}</strong>
                 <small>
                   {upscaleConfigured === null
                     ? 'API durumu kontrol ediliyor'
-                    : upscaleConfigured
-                      ? 'Dengeli mod · medium kalite · maks. 1920px · ücretli'
-                      : 'OPENAI_API_KEY gerekli'}
+                    : !upscaleConfigured
+                      ? 'OPENAI_API_KEY gerekli'
+                      : draft.image && isPublicationQuality(draft.imageWidth, draft.imageHeight)
+                        ? 'Görsel zaten yeterli çözünürlükte'
+                        : 'Dengeli mod · medium kalite · maks. 1920px · ücretli'}
                 </small>
               </span>
             </button>

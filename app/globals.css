@@ -782,6 +782,8 @@ button { color: inherit; }
   z-index: 3;
 }
 .rail-artwork { object-fit: contain; z-index: 2; }
+/* 9:16 gradyan 3:4 karta kırpılırken kırmızı ağırlık altta kalsın; üst şeffaf kalır. */
+.theme-international .detail-overlay-art { object-position: center bottom; }
 .rail-channel-avatar {
   border-radius: 50%;
   height: auto;
