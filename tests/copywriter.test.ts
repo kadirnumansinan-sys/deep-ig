@@ -17,6 +17,17 @@ test('kelime dizileri tek metne birleştirilir, eksik alan reddedilir', () => {
   assert.equal(copyFromWordArrays({ coverWords: ['x'], visualWords: ['y'] }), null);
 });
 
+test('yapışık kelimeler ayrılır, marka yazımı korunur', () => {
+  const copy = copyFromWordArrays({
+    coverWords: ['AnkaraBüyükşehirBelediyesi', 'karar'],
+    visualWords: ['ifade', 'edildi.Şimdilik', 'sürüyor'],
+    captionWords: ['iPhone', 'YouTube', 'detayı'],
+  });
+  assert.equal(copy?.coverTitle, 'Ankara Büyükşehir Belediyesi karar');
+  assert.equal(copy?.visualText, 'ifade edildi. Şimdilik sürüyor');
+  assert.equal(copy?.caption, 'iPhone YouTube detayı');
+});
+
 test('talimat metni kritik kural cümlelerini korur ve düzeltmeyi ekler', () => {
   const base = buildCopyInstructions('news');
   assert.ok(base.includes('You are the factual copy desk for the Deepbrief social media studio.'));

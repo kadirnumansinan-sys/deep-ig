@@ -170,9 +170,14 @@ async function generateWithGroqFirst(
       );
       issue = validationIssue(copy, channel, sourceName);
     }
-    if (issue) return null;
+    if (issue) {
+      console.warn('[generate-copy] Groq doğrulamayı geçemedi, OpenAI yedeğine düşülüyor:', issue);
+      return null;
+    }
     return { copy, provider: 'groq', model: groqCopyModel() };
-  } catch {
+  } catch (error) {
+    // Sessiz yutulan hata Groq yolunun neden hiç çalışmadığını gizliyordu; log kalsın.
+    console.warn('[generate-copy] Groq hatası, OpenAI yedeğine düşülüyor:', (error as Error)?.message ?? error);
     return null;
   }
 }

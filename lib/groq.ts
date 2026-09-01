@@ -373,7 +373,13 @@ export async function generateCopyWithGroq(
     }),
     schemaName: 'deepbrief_copy',
     schema: copyJsonSchema as unknown as Record<string, unknown>,
-    maxTokens: 900,
+    // Model 50-95 kelimelik caption dizisinden önce ~900 token reasoning harcıyor;
+    // 900'lük bütçe JSON tamamlanmadan kesiliyor ve istek json_validate_failed ile 400 dönüyordu.
+    maxTokens: 4000,
+    // 'low' seviyesinde model birden çok kelimeyi tek dizi öğesine yapıştırıyor
+    // ("toplutaşıma", "gelecekhaftapazartesigünü"); 'medium' temiz ayırıyor.
+    // 'high' bu şemada 7000 token bütçesinde bile json_validate_failed veriyor.
+    reasoningEffort: 'medium',
   });
   const copy = copyFromWordArrays(parsed);
   if (!copy) throw new GroqUnavailableError('Groq geçerli metin alanları döndürmedi.', 502);

@@ -45,6 +45,15 @@ export function wordCount(value: string): number {
   return value.trim() ? value.trim().split(/\s+/u).length : 0;
 }
 
+// Modeller ara sıra birden fazla kelimeyi tek dizi öğesine yapıştırıyor
+// ("edildi.Şimdilik", "AnkaraBüyükşehirBelediyesi"). Marka yazımlarını (iPhone, YouTube)
+// bozmamak için yalnızca noktalama sonrası ve en az üç küçük harften sonra ayır.
+function splitGluedWords(word: string): string {
+  return word
+    .replace(/([.,!?:;])(\p{Lu})/gu, '$1 $2')
+    .replace(/(\p{Ll}{3,})(\p{Lu})/gu, '$1 $2');
+}
+
 export function copyFromWordArrays(parsed: Partial<GeneratedWordArrays>): GeneratedCopy | null {
   if (
     !Array.isArray(parsed.coverWords)
@@ -52,15 +61,15 @@ export function copyFromWordArrays(parsed: Partial<GeneratedWordArrays>): Genera
     || !Array.isArray(parsed.captionWords)
   ) return null;
   const coverTitle = parsed.coverWords
-    .map((word) => limitedText(word, 80))
+    .map((word) => limitedText(splitGluedWords(word), 80))
     .filter(Boolean)
     .join(' ');
   const visualText = parsed.visualWords
-    .map((word) => limitedText(word, 80))
+    .map((word) => limitedText(splitGluedWords(word), 80))
     .filter(Boolean)
     .join(' ');
   const caption = parsed.captionWords
-    .map((word) => limitedText(word, 80))
+    .map((word) => limitedText(splitGluedWords(word), 80))
     .filter(Boolean)
     .join(' ');
   return coverTitle && visualText && caption ? { coverTitle, visualText, caption } : null;
