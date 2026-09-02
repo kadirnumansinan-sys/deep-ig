@@ -121,9 +121,12 @@ async function generate(
       }),
       // Kelime dizisi JSON'unda 54 kelimelik caption 353 token yakıyor; 95 kelimelik
       // üst sınır 500'lük bütçeyi aşıp yanıtı kesiyor ve parse null dönüyordu.
-      max_output_tokens: 1200,
-      reasoning: { effort: 'none' },
-      prompt_cache_key: 'deepbrief-copy-v3',
+      // 'low' muhakeme payı da bu bütçeye ekleniyor.
+      max_output_tokens: 2000,
+      // Ücretsiz havuzda 'low' altında modeller kelimeleri tek dizi öğesine yapıştırıyordu;
+      // OpenAI tarafında da 'none' yerine 'low' vererek dört sağlayıcıyı aynı kalitede tutuyoruz.
+      reasoning: { effort: 'low' },
+      prompt_cache_key: 'deepbrief-copy-v4',
       store: false,
       text: {
         format: {
@@ -164,12 +167,17 @@ async function generateWithGroqFirst(
   sourceName: string,
 ): Promise<{ copy: GeneratedCopy; provider: 'groq'; model: string } | null> {
   try {
-    let copy = sanitizeGeneratedCopy(await generateCopyWithGroq(channel, sourceTitle, sourceText), sourceName);
+    let copy = sanitizeGeneratedCopy(
+      await generateCopyWithGroq(channel, sourceTitle, sourceText),
+      sourceName,
+      channel,
+    );
     let issue = validationIssue(copy, channel, sourceName);
     if (issue) {
       copy = sanitizeGeneratedCopy(
         await generateCopyWithGroq(channel, sourceTitle, sourceText, correctionPrompt(issue)),
         sourceName,
+        channel,
       );
       issue = validationIssue(copy, channel, sourceName);
     }
@@ -264,12 +272,17 @@ export async function POST(request: Request) {
       );
     }
 
-    let copy = sanitizeGeneratedCopy(await generate(apiKey, channel, sourceTitle, sourceText), sourceName);
+    let copy = sanitizeGeneratedCopy(
+      await generate(apiKey, channel, sourceTitle, sourceText),
+      sourceName,
+      channel,
+    );
     let issue = validationIssue(copy, channel, sourceName);
     if (issue) {
       copy = sanitizeGeneratedCopy(
         await generate(apiKey, channel, sourceTitle, sourceText, correctionPrompt(issue)),
         sourceName,
+        channel,
       );
       issue = validationIssue(copy, channel, sourceName);
     }

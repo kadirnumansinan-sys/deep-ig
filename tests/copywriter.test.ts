@@ -6,10 +6,12 @@ import {
   copyFromWordArrays,
   copyJsonSchema,
   hashtagCount,
+  reachHashtagMinimum,
+  sanitizeGeneratedCopy,
   validationIssue,
 } from '../lib/copywriter';
 
-const sampleHashtags = ['#Ankara', '#Ulaşım', '#Belediye', '#Karar', '#Gündem'];
+const sampleHashtags = ['#Ankara', '#Ulaşım', '#Belediye', '#sondakika', '#haber'];
 
 test('kelime dizileri tek metne birleştirilir, eksik alan reddedilir', () => {
   const copy = copyFromWordArrays({
@@ -100,4 +102,61 @@ test('yasaklı kelimeler ve eksik etiket doğrulamada takılır', () => {
   );
   assert.ok(validationIssue({ ...good, hashtags: sampleHashtags.slice(0, 3) }, 'news', 'Kaynak')
     .includes(`exactly ${hashtagCount}`));
+});
+
+test('ölüm ve ölü maskesiz geçemez, maskeli biçim kabul edilir', () => {
+  const caption = Array.from({ length: 60 }, (_, index) => `kelime${index}`).join(' ');
+  const good = {
+    coverTitle: 'Ankara yeni ulaşım kararını duyurdu',
+    visualText: 'Belediye yeni ulaşım kararını bugün duyurdu. Uygulama gelecek hafta on iki hatta başlayacak.',
+    caption: `Belediye ulaşım planını genişletiyor. ${caption} Bu adım kart sistemini de yeniliyor.`,
+    hashtags: sampleHashtags,
+  };
+  for (const text of ['Kazada ölüm haberi geldi.', 'Ölüm sayısı bugün açıklandı.', 'Yaralılar ve ölüler sayıldı.']) {
+    assert.ok(
+      validationIssue({ ...good, visualText: `${text} Uygulama gelecek hafta on iki hatta başlayacak yine.` }, 'news', 'Kaynak')
+        .includes('masked'),
+      `${text} yakalanmalı`,
+    );
+  }
+  // Maskeli biçim ve "ölçüm" gibi benzeyen kelimeler takılmamalı.
+  assert.equal(
+    validationIssue(
+      { ...good, visualText: 'Kazada ö*üm bildirildi ve *lü sayısı açıklandı. Ölçüm sonuçları da bugün paylaşıldı.' },
+      'news',
+      'Kaynak',
+    ),
+    '',
+  );
+});
+
+test('sanitize maskeler, kaynak etiketini atar ve erişim etiketiyle tamamlar', () => {
+  const copy = sanitizeGeneratedCopy({
+    coverTitle: 'Ölüm haberi Hürriyet kaynaklı',
+    visualText: 'Ölümü doğrulandı ve ölüler sayıldı.',
+    caption: 'Yetkililer ölüm sayısını açıkladı.',
+    hashtags: ['#Ankara', '#Hürriyet', '#ölüm'],
+  }, 'Hürriyet', 'news');
+
+  assert.equal(copy.coverTitle, 'Ö*üm haberi kaynaklı');
+  assert.equal(copy.visualText, 'Ö*ümü doğrulandı ve *lüler sayıldı.');
+  assert.equal(copy.caption, 'Yetkililer ö*üm sayısını açıkladı.');
+  // Kaynak adlı ve "ölüm" içeren etiketler atıldı, liste havuzdan tam sayıya tamamlandı.
+  assert.equal(copy.hashtags.length, hashtagCount);
+  assert.equal(copy.hashtags[0], '#Ankara');
+  assert.ok(!copy.hashtags.some((tag) => /hürriyet|ölüm/iu.test(tag)));
+});
+
+test('konu etiketleri korunur, eksik erişim etiketi havuzdan eklenir', () => {
+  const copy = sanitizeGeneratedCopy({
+    coverTitle: 'Ankara kararı',
+    visualText: 'Karar açıklandı.',
+    caption: 'Detay geldi.',
+    hashtags: ['#Ankara', '#Ulaşım', '#Belediye', '#Karar', '#Metro'],
+  }, 'Kaynak', 'news');
+
+  assert.equal(copy.hashtags.length, hashtagCount);
+  assert.ok(copy.hashtags.includes('#Ankara'));
+  assert.ok(copy.hashtags.filter((tag) => ['#sondakika', '#haber', '#gündem', '#türkiye', '#haberler'].includes(tag))
+    .length >= reachHashtagMinimum);
 });

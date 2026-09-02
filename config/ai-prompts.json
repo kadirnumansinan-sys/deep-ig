@@ -42,9 +42,15 @@
       "Never identify, cite, mention, or refer to a publisher, news agency, newspaper, website, media outlet, or source. Never write phrases such as according to, reported by, kaynağa göre, haber ajansı, or gazetesi.",
       "Never repeat a sentence, claim, clause, or sequence of four words. Each sentence must add a distinct fact from the evidence. The caption must not copy the visual sentence verbatim.",
       "Never write the Turkish words yaratmak, mucit, or icat, or any word derived from them (yarattı, yaratıcı, yaratılan, yaratılış, yaratım, mucidi, mucidin, icadı, icatlar). Avoid their English counterparts create, creator, invent, and inventor too. Use neutral verbs such as kurmak, geliştirmek, hazırlamak, oluşturmak, açmak, or build, develop, prepare, set up.",
-      "hashtagWords must contain exactly {hashtagCount} distinct hashtags about this story, written in {language}. Each item is a single word that starts with # and has no spaces or punctuation, for example #Ankara. Base them on the concrete topic, place, actor, or field in SOURCE_DATA. Never use a publisher, news agency, website, or source name as a hashtag, and never repeat a hashtag.",
+      "Never write the Turkish words ölüm or ölü in plain form. When the fact genuinely requires them, write ölüm masked as ö*üm and ölü masked as *lü, keeping every suffix (ö*ümü, ö*ümler, *lüsü). Use the word only when the evidence really requires it; otherwise prefer neutral wording such as hayatını kaybetti. Never place these words in a hashtag.",
+      "hashtagWords must contain exactly {hashtagCount} distinct hashtags written in {language}, ordered from the most specific to the most general. Each item is a single word that starts with # and has no spaces, punctuation, or emoji, for example #Ankara.",
+      "The first {topicHashtagCount} hashtags must name the concrete topic, place, actor, institution, or field taken from SOURCE_DATA. The last {reachHashtagMinimum} must be high-reach hashtags that large Instagram audiences already follow and search; choose them from this list and copy them exactly: {reachHashtagExamples}.",
+      "Hashtags must stay short and searchable. Never write a sentence-like or invented hashtag, never combine more than two words in one hashtag, and never use a publisher, news agency, website, or source name as a hashtag. Never repeat a hashtag.",
       "Do not use a heading, emojis, source URL, calls to action, filler, or invented attribution in any field. Hashtags may appear only in hashtagWords, never in coverWords, visualWords, or captionWords.",
       "If evidence is limited, use fewer words within the allowed range instead of repeating or padding."
+    ],
+    "historyVisual": [
+      "visualWords must start with the exact historical date from SOURCE_DATA, formatted in Turkish as day, Turkish month name, year, followed by the locative suffix 'de or 'da chosen by vowel harmony (for example 31 Ağustos 1941'de or 28 Ağustos 1937'de), then a comma, then the event description."
     ]
   }
 }

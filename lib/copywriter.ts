@@ -1,5 +1,6 @@
 import type { Channel } from '@/lib/content';
 import {
+  containsBareDeathWord,
   containsTeaserLanguage,
   containsPublisherLanguage,
   containsSourceAttribution,
@@ -7,11 +8,12 @@ import {
   hasCompleteSentenceEnding,
   hasIncompleteEnding,
   hasRepeatedPhrase,
+  maskDeathWords,
   sharesPhrase,
   stripSourceAttribution,
 } from '@/lib/copy-guard';
 import { isLanguageMatch } from '@/lib/language';
-import { copyDeskPrompt } from '@/lib/prompts';
+import { copyDeskPrompt, historyVisualInstructions } from '@/lib/prompts';
 
 // Kural sabitleri burada; talimat metni config/ai-prompts.json içinde durur.
 // Metin kalitesi kuralları burada değişmez; Groq ve OpenAI aynı talimatı alır.
@@ -25,6 +27,23 @@ export const captionMaximumWords = 95;
 export const visualTargetWords = 23;
 export const captionTargetWords = 74;
 export const hashtagCount = 5;
+// Konuya özel etiket tek başına erişim getirmiyor; her gönderide en az iki tanesi
+// Instagram'da en çok kullanılan geniş erişimli etiketlerden olur.
+export const reachHashtagMinimum = 2;
+export const topicHashtagCount = hashtagCount - reachHashtagMinimum;
+
+// Kanal başına Instagram'da en yüksek kullanım hacmine sahip etiketler; sıra
+// önem sırasıdır, eksik kalan etiket baştan tamamlanır.
+const reachHashtagsByChannel: Record<Channel, readonly string[]> = {
+  news: ['#sondakika', '#haber', '#gündem', '#türkiye', '#haberler'],
+  media: ['#keşfet', '#gündem', '#haber', '#türkiye', '#sondakika'],
+  history: ['#tarih', '#keşfet', '#tarihtebugün', '#bilgi', '#türkiye'],
+  international: ['#news', '#breakingnews', '#worldnews', '#globalnews', '#today'],
+};
+
+export function reachHashtags(channel: Channel): readonly string[] {
+  return reachHashtagsByChannel[channel] ?? reachHashtagsByChannel.news;
+}
 
 export type GeneratedCopy = {
   coverTitle: string;
@@ -110,13 +129,47 @@ export function copyFromWordArrays(parsed: Partial<GeneratedWordArrays>): Genera
     : null;
 }
 
-export function sanitizeGeneratedCopy(copy: GeneratedCopy, sourceName: string): GeneratedCopy {
+const hashtagKey = (tag: string): string => tag.toLocaleLowerCase('tr-TR');
+
+/**
+ * Konu etiketlerini korur, listeyi kanalın yüksek erişimli etiketleriyle tamamlar.
+ * Modelin ne döndürdüğünden bağımsız çalışır; dört sağlayıcı da aynı karışımı verir.
+ */
+function withReachHashtags(tags: readonly string[], channel: Channel): string[] {
+  const pool = reachHashtags(channel);
+  const poolKeys = new Set(pool.map(hashtagKey));
+  const topic = tags.filter((tag) => !poolKeys.has(hashtagKey(tag)));
+  const popular = tags.filter((tag) => poolKeys.has(hashtagKey(tag)));
+  for (const tag of pool) {
+    if (popular.length >= reachHashtagMinimum) break;
+    if (!popular.some((existing) => hashtagKey(existing) === hashtagKey(tag))) popular.push(tag);
+  }
+  const merged = [...topic.slice(0, Math.max(0, hashtagCount - popular.length)), ...popular];
+  // Model az etiket döndürdüyse boşluk yine havuzdan kapatılır; sayı hep hashtagCount.
+  for (const tag of pool) {
+    if (merged.length >= hashtagCount) break;
+    if (!merged.some((existing) => hashtagKey(existing) === hashtagKey(tag))) merged.push(tag);
+  }
+  return merged.slice(0, hashtagCount);
+}
+
+export function sanitizeGeneratedCopy(
+  copy: GeneratedCopy,
+  sourceName: string,
+  channel: Channel,
+): GeneratedCopy {
   return {
-    coverTitle: stripSourceAttribution(copy.coverTitle, sourceName),
-    visualText: stripSourceAttribution(copy.visualText, sourceName),
-    caption: stripSourceAttribution(copy.caption, sourceName),
-    // Kaynak adını etikete çeviren yanıtlar eksik kalır ve doğrulamada düzeltmeye gider.
-    hashtags: copy.hashtags.filter((tag) => !containsSourceAttribution(tag, sourceName)),
+    coverTitle: maskDeathWords(stripSourceAttribution(copy.coverTitle, sourceName)),
+    visualText: maskDeathWords(stripSourceAttribution(copy.visualText, sourceName)),
+    caption: maskDeathWords(stripSourceAttribution(copy.caption, sourceName)),
+    // Kaynak adını ya da maskelenemeyen "ölüm" kelimesini taşıyan etiket atılır;
+    // eksilen yer kanalın yüksek erişimli etiketinden tamamlanır.
+    hashtags: withReachHashtags(
+      copy.hashtags.filter((tag) => (
+        !containsSourceAttribution(tag, sourceName) && !containsBareDeathWord(tag)
+      )),
+      channel,
+    ),
   };
 }
 
@@ -143,11 +196,19 @@ export function validationIssue(copy: GeneratedCopy, channel: Channel, sourceNam
   if (forbiddenWord) {
     return `the word "${forbiddenWord}" is forbidden; never use yaratmak, mucit, icat or any word derived from them in any field`;
   }
+  if (containsBareDeathWord(`${copy.coverTitle} ${copy.visualText} ${copy.caption}`)) {
+    return 'the words ölüm and ölü must never appear in plain form; write them masked as ö*üm and *lü, and only when the fact truly requires them';
+  }
   if (
     copy.hashtags.length !== hashtagCount
     || copy.hashtags.some((tag) => !/^#[\p{L}\p{N}_]+$/u.test(tag))
   ) {
     return `hashtags must contain exactly ${hashtagCount} distinct topic hashtags; each one is a single word starting with # and must not name a publisher or source`;
+  }
+  if (copy.hashtags.filter((tag) => (
+    reachHashtags(channel).some((popular) => hashtagKey(popular) === hashtagKey(tag))
+  )).length < reachHashtagMinimum) {
+    return `at least ${reachHashtagMinimum} hashtags must be high-reach tags that Instagram audiences already follow, taken from ${reachHashtags(channel).join(' ')}`;
   }
   if (
     containsSourceAttribution(`${copy.coverTitle} ${copy.visualText} ${copy.caption}`, sourceName)
@@ -195,7 +256,10 @@ export function buildCopyInstructions(channel: Channel, correction = ''): string
     captionMaximumWords,
     captionTargetWords,
     hashtagCount,
-  }, correction);
+    topicHashtagCount,
+    reachHashtagMinimum,
+    reachHashtagExamples: reachHashtags(channel).join(', '),
+  }, correction, channel === 'history' ? historyVisualInstructions() : []);
 }
 
 // json_schema gövdesi: OpenAI'de text.format.schema, Groq'ta response_format.json_schema.schema.

@@ -168,6 +168,24 @@ export function forbiddenWordIn(value: string): string {
   return words(value).find((word) => forbiddenStems.test(word)) ?? '';
 }
 
+// Instagram erişim filtresi "ölüm/ölü" kelimesini cezalandırıyor; metinde yalnızca
+// maskeli biçim yayınlanır: "ölüm" -> "ö*üm", "ölü" -> "*lü". Ekler korunur
+// ("ölümü" -> "ö*ümü", "ölüler" -> "*lüler"). "ölçüm", "ölçek" gibi kelimeler
+// gövdeye uymadığı için etkilenmez.
+const bareDeathWord = /(?<!\p{L})[öÖ]lü/u;
+
+/** Maskelenmemiş "ölüm"/"ölü" var mı? */
+export function containsBareDeathWord(value: string): boolean {
+  return bareDeathWord.test(value);
+}
+
+/** Kelimeyi maskeli biçimine çevirir; kalan metne dokunmaz. */
+export function maskDeathWords(value: string): string {
+  return value
+    .replace(/(?<!\p{L})([öÖ])lüm/gu, '$1*üm')
+    .replace(/(?<!\p{L})[öÖ]lü(?!m)/gu, '*lü');
+}
+
 export function completeExcerpt(value: string, preferredLimit: number): string {
   const clean = value.replace(/\s+/gu, ' ').trim();
   if (clean.length <= preferredLimit) return clean;

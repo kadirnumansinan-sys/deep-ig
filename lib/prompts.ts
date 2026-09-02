@@ -36,6 +36,13 @@ export function gapScanFocus(channel: string): string {
 }
 
 /** Metin yazan modele verilen talimat; kelime sınırları ve düzeltme notu eklenir. */
-export function copyDeskPrompt(values: PromptValues, correction = ''): string {
-  return joinLines(prompts.copyDesk.instructions, values, correction ? [correction] : []);
+export function copyDeskPrompt(values: PromptValues, correction = '', channelExtra: readonly string[] = []): string {
+  const extra = [...channelExtra.map((line) => fill(line, values))];
+  if (correction) extra.push(correction);
+  return joinLines(prompts.copyDesk.instructions, values, extra);
+}
+
+/** Kanala özgü ek copy desk talimatları (ör. history için tarih biçimi). */
+export function historyVisualInstructions(): readonly string[] {
+  return prompts.copyDesk.historyVisual;
 }
