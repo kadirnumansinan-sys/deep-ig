@@ -867,24 +867,6 @@ button { color: inherit; }
 .cover-canvas h3.title-compact { font-size: 4.9cqw; line-height: 1.02; }
 .cover-canvas h3.title-dense { font-size: 4.25cqw; line-height: 1.04; }
 .cover-canvas h3.title-tight { font-size: 3.65cqw; line-height: 1.08; }
-/* History kapak başlığı: sol hizalı, döndürülmemiş, yuvarlak kalın font. */
-.cover-canvas.theme-history h3 {
-  font-family: Montserrat, ui-sans-serif, system-ui, sans-serif;
-  font-size: 5.1cqw;
-  font-weight: 800;
-  left: 8%;
-  letter-spacing: -0.1px;
-  line-height: 1.1;
-  max-width: none;
-  text-align: left;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.32);
-  top: 63%;
-  transform: none;
-  width: 84%;
-}
-.cover-canvas.theme-history h3.title-compact { font-size: 4.5cqw; line-height: 1.12; }
-.cover-canvas.theme-history h3.title-dense { font-size: 3.95cqw; line-height: 1.14; }
-.cover-canvas.theme-history h3.title-tight { font-size: 3.45cqw; line-height: 1.16; }
 .detail-canvas {
   align-items: center;
   background: #080808 url('/assets/deepbrief/textures/black-paper.png') center / 55% auto repeat;
