@@ -381,8 +381,12 @@ export async function loadRecentCandidates(
   }
 }
 
+// Kota defteri sağlayıcı bazında tutulur: Groq'un günlük sınırı dolduğunda
+// Cerebras/Gemini kendi bağımsız kotalarıyla çalışmaya devam eder.
+export type ProviderId = 'groq' | 'openai' | 'cerebras' | 'gemini';
+
 export async function reserveProviderRequest(
-  provider: 'groq' | 'openai',
+  provider: ProviderId,
   task: ProviderTask,
   date: string,
   limit: number,
@@ -416,7 +420,7 @@ export async function reserveProviderRequest(
 }
 
 export async function recordProviderTokens(
-  provider: 'groq' | 'openai',
+  provider: ProviderId,
   task: ProviderTask,
   date: string,
   inputTokens: number,
@@ -441,7 +445,7 @@ export async function recordProviderTokens(
 }
 
 export async function getProviderUsage(
-  provider: 'groq' | 'openai',
+  provider: ProviderId,
   task: ProviderTask,
   date: string,
 ): Promise<{ requests: number; inputTokens: number; outputTokens: number }> {
@@ -479,7 +483,7 @@ export async function readProviderCache<T>(cacheKey: string): Promise<T | null> 
 
 export async function writeProviderCache(
   cacheKey: string,
-  provider: 'groq' | 'openai',
+  provider: ProviderId,
   task: ProviderTask,
   model: string,
   payload: unknown,

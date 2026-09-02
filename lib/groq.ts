@@ -6,6 +6,7 @@ import type {
 } from '@/lib/content';
 import {
   getProviderUsage,
+  type ProviderId,
   readProviderCache,
   recordProviderTokens,
   reserveProviderRequest,
@@ -20,12 +21,32 @@ import {
 } from '@/lib/copywriter';
 import { istanbulNowDate, normalizeNewsText } from '@/lib/news-intelligence';
 
-const endpoint = 'https://api.groq.com/openai/v1/chat/completions';
+const groqEndpoint = 'https://api.groq.com/openai/v1/chat/completions';
+const cerebrasEndpoint = 'https://api.cerebras.ai/v1/chat/completions';
+const geminiEndpoint = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
+
 const defaultAnalysisModel = 'openai/gpt-oss-20b';
 const defaultSearchModel = 'groq/compound';
 const defaultCopyModel = 'openai/gpt-oss-120b';
+const defaultCerebrasModel = 'gpt-oss-120b';
+const defaultGeminiModel = 'gemini-2.5-flash';
 
 type GroqTask = 'analysis' | 'search' | 'copy';
+type PoolProvider = Extract<ProviderId, 'groq' | 'cerebras' | 'gemini'>;
+
+// Havuzdaki tek bir anahtar. Hepsi OpenAI uyumlu /chat/completions konuşur;
+// aradaki farklar (model adı, desteklenen gövde alanları) burada taşınır.
+type ProviderSlot = {
+  slot: number;
+  provider: PoolProvider;
+  label: string;
+  endpoint: string;
+  key: string;
+  model: string;
+  supportsReasoningEffort: boolean;
+  supportsMaxCompletionTokens: boolean;
+  supportsStrictSchema: boolean;
+};
 
 type KeyState = {
   slot: number;
@@ -36,12 +57,8 @@ type KeyState = {
   lastUsedAt: number;
 };
 
-type DailyUsage = {
-  date: string;
-  analysis: number;
-  search: number;
-  copy: number;
-};
+type TaskCounters = { analysis: number; search: number; copy: number };
+type DailyUsage = { date: string } & Record<PoolProvider, TaskCounters>;
 
 type CacheEntry<T> = {
   expiresAt: number;
@@ -95,10 +112,21 @@ export type GroqGapStory = {
   location: string;
 };
 
+const poolProviders: PoolProvider[] = ['cerebras', 'groq', 'gemini'];
+
+function freshUsage(): DailyUsage {
+  return {
+    date: istanbulNowDate(),
+    cerebras: { analysis: 0, search: 0, copy: 0 },
+    groq: { analysis: 0, search: 0, copy: 0 },
+    gemini: { analysis: 0, search: 0, copy: 0 },
+  };
+}
+
 const keyStates = new Map<number, KeyState>();
 const responseCache = new Map<string, CacheEntry<unknown>>();
-let dailyUsage: DailyUsage = { date: istanbulNowDate(), analysis: 0, search: 0, copy: 0 };
-let globalBackoffUntil = 0;
+const providerBackoffUntil = new Map<PoolProvider, number>();
+let dailyUsage: DailyUsage = freshUsage();
 
 export class GroqUnavailableError extends Error {
   constructor(message: string, public readonly status = 503) {
@@ -112,10 +140,27 @@ function positiveInteger(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function taskLimit(task: GroqTask): number {
-  if (task === 'analysis') return positiveInteger(process.env.GROQ_DAILY_ANALYSIS_LIMIT, 40);
-  if (task === 'copy') return positiveInteger(process.env.GROQ_DAILY_COPY_LIMIT, 30);
-  return positiveInteger(process.env.GROQ_DAILY_SEARCH_LIMIT, 16);
+const limitDefaults: Record<PoolProvider, TaskCounters> = {
+  // Ücretsiz katmanı ~1M token/gün olduğu için uygulama sınırı bilinçli olarak cömert.
+  cerebras: { analysis: 250, search: 0, copy: 150 },
+  // Groq kotası korunur: web aramalı `groq/compound` başka sağlayıcıya devredilemiyor.
+  groq: { analysis: 40, search: 16, copy: 30 },
+  // Ücretsiz katmanı düşük RPM'li; yalnızca taşma katmanı olduğu için dar tutulur.
+  gemini: { analysis: 60, search: 0, copy: 40 },
+};
+
+const limitEnvPrefix: Record<PoolProvider, string> = {
+  cerebras: 'CEREBRAS',
+  groq: 'GROQ',
+  gemini: 'GEMINI',
+};
+
+function taskLimit(provider: PoolProvider, task: GroqTask): number {
+  const suffix = task === 'analysis' ? 'ANALYSIS' : task === 'copy' ? 'COPY' : 'SEARCH';
+  return positiveInteger(
+    process.env[`${limitEnvPrefix[provider]}_DAILY_${suffix}_LIMIT`],
+    limitDefaults[provider][task],
+  );
 }
 
 function taskLabel(task: GroqTask): string {
@@ -128,10 +173,98 @@ function keysShareQuota(): boolean {
   return process.env.GROQ_KEYS_SHARE_QUOTA?.trim().toLowerCase() !== 'false';
 }
 
-function configuredKeys(): Array<{ slot: number; key: string }> {
-  return [process.env.GROQ_API_KEY_1, process.env.GROQ_API_KEY_2]
-    .map((key, index) => ({ slot: index + 1, key: key?.trim() || '' }))
-    .filter((entry) => Boolean(entry.key));
+function envValue(name: string, fallback: string): string {
+  return process.env[name]?.trim() || fallback;
+}
+
+function groqModel(task: GroqTask): string {
+  if (task === 'copy') return groqCopyModel();
+  if (task === 'search') return envValue('GROQ_SEARCH_MODEL', defaultSearchModel);
+  return envValue('GROQ_ANALYSIS_MODEL', defaultAnalysisModel);
+}
+
+// Öncelik sırası (slot numarası = deneme sırası):
+//   1) Cerebras  — en cömert ücretsiz kota (~1M token/gün), en hızlı çıkarım
+//   2) Groq #1   — ücretsiz ama dar; kotası arama görevi için korunur
+//   3) Groq #2
+//   4) Gemini    — düşük RPM'li son ücretsiz taşma katmanı
+// `search` görevi yalnızca Groq'ta çalışır: `groq/compound` modelinin dahili web
+// araması başka sağlayıcıda karşılığı olmadığı için devredilemez.
+function configuredSlots(task: GroqTask): ProviderSlot[] {
+  const slots: ProviderSlot[] = [];
+  const cerebrasKey = process.env.CEREBRAS_API_KEY?.trim();
+  const geminiKey = process.env.GEMINI_API_KEY?.trim();
+
+  if (task !== 'search' && cerebrasKey) {
+    slots.push({
+      slot: 1,
+      provider: 'cerebras',
+      label: 'Cerebras',
+      endpoint: cerebrasEndpoint,
+      key: cerebrasKey,
+      model: envValue(
+        task === 'copy' ? 'CEREBRAS_COPY_MODEL' : 'CEREBRAS_ANALYSIS_MODEL',
+        defaultCerebrasModel,
+      ),
+      supportsReasoningEffort: true,
+      supportsMaxCompletionTokens: true,
+      supportsStrictSchema: true,
+    });
+  }
+
+  [process.env.GROQ_API_KEY_1, process.env.GROQ_API_KEY_2].forEach((raw, index) => {
+    const key = raw?.trim();
+    if (!key) return;
+    slots.push({
+      slot: 2 + index,
+      provider: 'groq',
+      label: `Groq #${index + 1}`,
+      endpoint: groqEndpoint,
+      key,
+      model: groqModel(task),
+      supportsReasoningEffort: true,
+      supportsMaxCompletionTokens: true,
+      supportsStrictSchema: true,
+    });
+  });
+
+  if (task !== 'search' && geminiKey) {
+    slots.push({
+      slot: 4,
+      provider: 'gemini',
+      label: 'Gemini',
+      endpoint: geminiEndpoint,
+      key: geminiKey,
+      // OpenAI uyumluluk katmanı `max_completion_tokens`, `reasoning_effort` ve
+      // `strict` alanlarını kabul etmiyor; gövde bunlara göre sadeleştirilir.
+      model: envValue(
+        task === 'copy' ? 'GEMINI_COPY_MODEL' : 'GEMINI_ANALYSIS_MODEL',
+        defaultGeminiModel,
+      ),
+      supportsReasoningEffort: false,
+      supportsMaxCompletionTokens: false,
+      supportsStrictSchema: false,
+    });
+  }
+
+  return slots;
+}
+
+// Sağlayıcıdan bağımsız gövdeyi o slotun kabul ettiği alanlara indirger.
+function bodyForSlot(slot: ProviderSlot, body: Record<string, unknown>): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...body, model: slot.model };
+  if (!slot.supportsReasoningEffort) delete next.reasoning_effort;
+  if (!slot.supportsMaxCompletionTokens && next.max_completion_tokens !== undefined) {
+    next.max_tokens = next.max_completion_tokens;
+    delete next.max_completion_tokens;
+  }
+  const format = next.response_format as { json_schema?: Record<string, unknown> } | undefined;
+  if (!slot.supportsStrictSchema && format?.json_schema) {
+    const jsonSchema = { ...format.json_schema };
+    delete jsonSchema.strict;
+    next.response_format = { ...format, json_schema: jsonSchema };
+  }
+  return next;
 }
 
 function stateFor(slot: number): KeyState {
@@ -152,8 +285,8 @@ function stateFor(slot: number): KeyState {
 function resetDailyUsageIfNeeded(): void {
   const today = istanbulNowDate();
   if (dailyUsage.date !== today) {
-    dailyUsage = { date: today, analysis: 0, search: 0, copy: 0 };
-    globalBackoffUntil = 0;
+    dailyUsage = freshUsage();
+    providerBackoffUntil.clear();
   }
 }
 
@@ -201,12 +334,28 @@ function retryAfterMs(response: Response): number {
   return 60_000;
 }
 
-function providerMessage(status: number, payload: GroqErrorPayload): string {
+function providerMessage(label: string, status: number, payload: GroqErrorPayload): string {
   const detail = `${payload.error?.code || ''} ${payload.error?.message || ''}`.toLowerCase();
-  if (status === 401 || status === 403) return 'Groq API anahtarı reddedildi veya modele erişim yok.';
-  if (status === 429 || detail.includes('rate limit')) return 'Groq ücretsiz kullanım sınırına ulaşıldı; sistem kurallı analizle çalışmaya devam ediyor.';
-  if (status >= 500) return 'Groq servisine geçici olarak ulaşılamıyor; sistem kurallı analizle çalışmaya devam ediyor.';
-  return 'Groq analizi tamamlanamadı.';
+  if (status === 401 || status === 403) return `${label} API anahtarı reddedildi veya modele erişim yok.`;
+  if (status === 429 || detail.includes('rate limit')) return `${label} ücretsiz kullanım sınırına ulaşıldı; sistem sıradaki sağlayıcıyla devam ediyor.`;
+  if (status >= 500) return `${label} servisine geçici olarak ulaşılamıyor; sistem sıradaki sağlayıcıyla devam ediyor.`;
+  return `${label} isteği tamamlanamadı.`;
+}
+
+// Ortak kotalı Groq anahtarlarında beklemeyi yalnızca hiçbir anahtar kalmadığında başlat;
+// erken başlatmak 2. anahtarı hiç denemeden Groq'u kapatıyordu. Bekleme, en erken toparlanan
+// anahtarın süresi kadar sürer ve yalnızca Groq'u kapsar — havuzdaki diğer sağlayıcılar
+// kendi kotalarıyla çalışmayı sürdürür.
+function applyGroqBackoffIfAllKeysExhausted(slots: ProviderSlot[]): void {
+  if (!keysShareQuota()) return;
+  const now = Date.now();
+  const usable = slots
+    .filter((slot) => slot.provider === 'groq')
+    .map((slot) => stateFor(slot.slot))
+    .filter((state) => !state.permanentlyDisabled);
+  if (!usable.length) return;
+  if (usable.some((state) => state.disabledUntil <= now)) return;
+  providerBackoffUntil.set('groq', Math.min(...usable.map((state) => state.disabledUntil)));
 }
 
 async function groqRequest(
@@ -214,61 +363,73 @@ async function groqRequest(
   body: Record<string, unknown>,
 ): Promise<GroqChatPayload> {
   resetDailyUsageIfNeeded();
-  const entries = configuredKeys();
-  if (!entries.length) throw new GroqUnavailableError('GROQ_API_KEY_1 veya GROQ_API_KEY_2 ayarlı değil.');
-  if (Date.now() < globalBackoffUntil) {
-    throw new GroqUnavailableError('Groq geçici bekleme süresinde; ücretsiz kota korunuyor.', 429);
-  }
-  if (dailyUsage[task] >= taskLimit(task)) {
-    throw new GroqUnavailableError(`Groq ${taskLabel(task)} için günlük güvenlik sınırına ulaştı.`, 429);
+  const slots = configuredSlots(task);
+  if (!slots.length) {
+    throw new GroqUnavailableError(
+      task === 'search'
+        ? 'GROQ_API_KEY_1 veya GROQ_API_KEY_2 ayarlı değil (arama yalnızca Groq üzerinden çalışır).'
+        : 'Ücretsiz sağlayıcı anahtarı ayarlı değil (CEREBRAS_API_KEY / GROQ_API_KEY_1 / GEMINI_API_KEY).',
+    );
   }
 
-  const available = entries
-    .map((entry) => ({ ...entry, state: stateFor(entry.slot) }))
-    .filter((entry) => !entry.state.permanentlyDisabled && entry.state.disabledUntil <= Date.now())
-    .sort((left, right) => {
-      const leftRemaining = left.state.remainingRequests ?? Number.MAX_SAFE_INTEGER;
-      const rightRemaining = right.state.remainingRequests ?? Number.MAX_SAFE_INTEGER;
-      return rightRemaining - leftRemaining || left.state.lastUsedAt - right.state.lastUsedAt;
-    });
-  if (!available.length) throw new GroqUnavailableError('Groq anahtarları geçici olarak kullanılamıyor.', 429);
-
-  const reservation = await reserveProviderRequest(
-    'groq',
-    task,
-    dailyUsage.date,
-    taskLimit(task),
-  );
-  if (!reservation.allowed) {
-    dailyUsage[task] = Math.max(dailyUsage[task], reservation.requests);
-    throw new GroqUnavailableError(`Groq ${taskLabel(task)} için günlük güvenlik sınırına ulaştı.`, 429);
+  const startedAt = Date.now();
+  const available = slots
+    .map((slot) => ({ slot, state: stateFor(slot.slot) }))
+    .filter((entry) => !entry.state.permanentlyDisabled
+      && entry.state.disabledUntil <= startedAt
+      && (providerBackoffUntil.get(entry.slot.provider) || 0) <= startedAt
+      && dailyUsage[entry.slot.provider][task] < taskLimit(entry.slot.provider, task))
+    // Sıra sabit: öncelikli slot tükenene kadar kullanılır, sonra sıradakine geçilir.
+    // Kalan kotaya göre dengeleme yapmak ücretsiz kotaların hepsini yarım bırakıyordu.
+    .sort((left, right) => left.slot.slot - right.slot.slot);
+  if (!available.length) {
+    throw new GroqUnavailableError(
+      `Ücretsiz sağlayıcıların tamamı ${taskLabel(task)} için kota veya bekleme durumunda.`,
+      429,
+    );
   }
-  dailyUsage[task] = reservation.durable
-    ? Math.max(dailyUsage[task] + 1, reservation.requests)
-    : dailyUsage[task] + 1;
+
   let lastError: GroqUnavailableError | null = null;
-  for (let index = 0; index < available.length; index += 1) {
-    const entry = available[index];
-    entry.state.lastUsedAt = Date.now();
+  for (const { slot, state } of available) {
+    // Kota rezervasyonu slot bazında yapılır; her sağlayıcının defteri bağımsızdır.
+    const reservation = await reserveProviderRequest(
+      slot.provider,
+      task,
+      dailyUsage.date,
+      taskLimit(slot.provider, task),
+    );
+    if (!reservation.allowed) {
+      dailyUsage[slot.provider][task] = Math.max(dailyUsage[slot.provider][task], reservation.requests);
+      lastError = new GroqUnavailableError(
+        `${slot.label} ${taskLabel(task)} için günlük güvenlik sınırına ulaştı.`,
+        429,
+      );
+      continue;
+    }
+    dailyUsage[slot.provider][task] = reservation.durable
+      ? Math.max(dailyUsage[slot.provider][task] + 1, reservation.requests)
+      : dailyUsage[slot.provider][task] + 1;
+
+    state.lastUsedAt = Date.now();
     try {
-      const response = await fetch(endpoint, {
+      const response = await fetch(slot.endpoint, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${entry.key}`,
+          Authorization: `Bearer ${slot.key}`,
           'Content-Type': 'application/json',
           'User-Agent': 'DeepbriefContentStudio/2.0',
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(bodyForSlot(slot, body)),
         cache: 'no-store',
         signal: AbortSignal.timeout(task === 'analysis' ? 25_000 : task === 'copy' ? 45_000 : 35_000),
       });
       const payload = await response.json().catch(() => ({})) as GroqChatPayload;
-      entry.state.remainingRequests = parseRemaining(response, 'x-ratelimit-remaining-requests');
-      entry.state.remainingTokens = parseRemaining(response, 'x-ratelimit-remaining-tokens');
+      state.remainingRequests = parseRemaining(response, 'x-ratelimit-remaining-requests');
+      state.remainingTokens = parseRemaining(response, 'x-ratelimit-remaining-tokens');
 
       if (response.ok) {
         await recordProviderTokens(
-          'groq',
+          slot.provider,
           task,
           dailyUsage.date,
           Number(payload.usage?.prompt_tokens || 0),
@@ -276,39 +437,43 @@ async function groqRequest(
         );
         return payload;
       }
-      const error = new GroqUnavailableError(providerMessage(response.status, payload), response.status);
-      lastError = error;
+      lastError = new GroqUnavailableError(
+        providerMessage(slot.label, response.status, payload),
+        response.status,
+      );
       if (response.status === 401 || response.status === 403) {
-        entry.state.permanentlyDisabled = true;
+        state.permanentlyDisabled = true;
         continue;
       }
       if (response.status === 429) {
         const protectiveCooldown = task === 'search'
           ? Math.max(3, Math.min(24, positiveInteger(process.env.GROQ_GAP_CACHE_HOURS, 6))) * 60 * 60_000
           : 15 * 60_000;
-        entry.state.disabledUntil = Date.now() + Math.max(retryAfterMs(response), protectiveCooldown);
-        if (keysShareQuota()) {
-          globalBackoffUntil = entry.state.disabledUntil;
-          break;
-        }
+        state.disabledUntil = Date.now() + Math.max(retryAfterMs(response), protectiveCooldown);
+        // Bu slotun limiti dolduğunda sıradaki slot denenir. Groq'un ortak kota koruması
+        // ancak tüm Groq anahtarları tükendiğinde, döngü bittikten sonra devreye girer.
         continue;
       }
       if (response.status >= 500) {
-        entry.state.disabledUntil = Date.now() + 30_000;
+        state.disabledUntil = Date.now() + 30_000;
         continue;
       }
-      break;
+      // Diğer 4xx'ler sağlayıcıya özgüdür (bilinmeyen model, kabul edilmeyen gövde alanı).
+      // Havuz karışık sağlayıcılardan oluştuğu için isteği bitirmek yerine bu slotu bir
+      // süreliğine devre dışı bırakıp sıradakine geçilir.
+      state.disabledUntil = Date.now() + 10 * 60_000;
     } catch (error) {
-      entry.state.disabledUntil = Date.now() + 20_000;
+      state.disabledUntil = Date.now() + 20_000;
       lastError = new GroqUnavailableError(
         error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')
-          ? 'Groq isteği zaman aşımına uğradı.'
-          : 'Groq servisine bağlanılamadı.',
+          ? `${slot.label} isteği zaman aşımına uğradı.`
+          : `${slot.label} servisine bağlanılamadı.`,
         504,
       );
     }
   }
-  throw lastError || new GroqUnavailableError('Groq analizi tamamlanamadı.');
+  applyGroqBackoffIfAllKeysExhausted(slots);
+  throw lastError || new GroqUnavailableError('Ücretsiz sağlayıcıların hiçbiri isteği tamamlayamadı.');
 }
 
 type GroqJsonRequest = {
@@ -815,32 +980,66 @@ export function mergeGroqAnalysis(
   });
 }
 
+// Havuzda yapılandırılmış sağlayıcılar; `analysis` tüm sağlayıcıları kapsadığı için
+// slot listesi buradan türetilir (`search` yalnızca Groq döner).
+function poolSlots(): ProviderSlot[] {
+  const slots = configuredSlots('analysis');
+  const seen = new Set(slots.map((slot) => slot.slot));
+  configuredSlots('search').forEach((slot) => {
+    if (!seen.has(slot.slot)) slots.push(slot);
+  });
+  return slots.sort((left, right) => left.slot - right.slot);
+}
+
+// Kullanım ve sınırlar sağlayıcılar arasında toplanır: arayüz tek bir ücretsiz
+// bütçe görür, kota defteri ise sağlayıcı bazında ayrı tutulmaya devam eder.
+function usageTotals(task: GroqTask) {
+  const active = new Set(poolSlots().map((slot) => slot.provider));
+  let used = 0;
+  let limit = 0;
+  poolProviders.forEach((provider) => {
+    if (!active.has(provider)) return;
+    used += dailyUsage[provider][task];
+    limit += taskLimit(provider, task);
+  });
+  return { used, limit };
+}
+
 export function groqStatus() {
   resetDailyUsageIfNeeded();
-  const keys = configuredKeys();
+  const slots = poolSlots();
+  const analysis = usageTotals('analysis');
+  const search = usageTotals('search');
+  const copy = usageTotals('copy');
   return {
-    configured: keys.length > 0,
-    keyCount: keys.length,
+    configured: slots.length > 0,
+    keyCount: slots.length,
     analysisModel: process.env.GROQ_ANALYSIS_MODEL?.trim() || defaultAnalysisModel,
     searchModel: process.env.GROQ_SEARCH_MODEL?.trim() || defaultSearchModel,
     copyModel: groqCopyModel(),
     keysShareQuota: keysShareQuota(),
+    // Deneme sırası: Cerebras → Groq #1 → Groq #2 → Gemini.
+    providerOrder: slots.map((slot) => slot.label),
     usage: {
       date: dailyUsage.date,
-      analysis: dailyUsage.analysis,
-      analysisLimit: taskLimit('analysis'),
-      search: dailyUsage.search,
-      searchLimit: taskLimit('search'),
-      copy: dailyUsage.copy,
-      copyLimit: taskLimit('copy'),
+      analysis: analysis.used,
+      analysisLimit: analysis.limit,
+      search: search.used,
+      searchLimit: search.limit,
+      copy: copy.used,
+      copyLimit: copy.limit,
     },
-    keyHealth: keys.map(({ slot }) => {
-      const state = stateFor(slot);
+    keyHealth: slots.map((slot) => {
+      const state = stateFor(slot.slot);
+      const backoffUntil = providerBackoffUntil.get(slot.provider) || 0;
       return {
-        slot,
+        slot: slot.slot,
+        provider: slot.provider,
+        label: slot.label,
+        model: slot.model,
         status: state.permanentlyDisabled
           ? 'invalid'
-          : state.disabledUntil > Date.now() ? 'cooldown' : 'ready',
+          : state.disabledUntil > Date.now() || backoffUntil > Date.now() ? 'cooldown' : 'ready',
         remainingRequests: state.remainingRequests,
         remainingTokens: state.remainingTokens,
       };
@@ -850,14 +1049,17 @@ export function groqStatus() {
 
 export async function groqStatusWithDurableUsage() {
   resetDailyUsageIfNeeded();
-  const [analysis, search, copy] = await Promise.all([
-    getProviderUsage('groq', 'analysis', dailyUsage.date),
-    getProviderUsage('groq', 'search', dailyUsage.date),
-    getProviderUsage('groq', 'copy', dailyUsage.date),
-  ]);
-  dailyUsage.analysis = Math.max(dailyUsage.analysis, analysis.requests);
-  dailyUsage.search = Math.max(dailyUsage.search, search.requests);
-  dailyUsage.copy = Math.max(dailyUsage.copy, copy.requests);
+  const tasks: GroqTask[] = ['analysis', 'search', 'copy'];
+  const rows = await Promise.all(
+    poolProviders.flatMap((provider) => tasks.map(async (task) => ({
+      provider,
+      task,
+      usage: await getProviderUsage(provider, task, dailyUsage.date),
+    }))),
+  );
+  rows.forEach(({ provider, task, usage }) => {
+    dailyUsage[provider][task] = Math.max(dailyUsage[provider][task], usage.requests);
+  });
   return groqStatus();
 }
 
