@@ -159,6 +159,15 @@ export function containsTeaserLanguage(value: string): boolean {
   return phrases.some((phrase) => normalized.includes(` ${phrase} `));
 }
 
+// Marka dili kararı: "yaratmak", "mucit", "icat" ve türevleri hiçbir alanda geçmez.
+// Gövdeler normalize edilmiş (şapkasız, küçük harf) kelimenin başında aranır.
+const forbiddenStems = /^(?:yarat|mucit|mucid|icat|icad)/u;
+
+/** Yasaklı kelimelerden ilkini döndürür; yoksa boş metin. */
+export function forbiddenWordIn(value: string): string {
+  return words(value).find((word) => forbiddenStems.test(word)) ?? '';
+}
+
 export function completeExcerpt(value: string, preferredLimit: number): string {
   const clean = value.replace(/\s+/gu, ' ').trim();
   if (clean.length <= preferredLimit) return clean;

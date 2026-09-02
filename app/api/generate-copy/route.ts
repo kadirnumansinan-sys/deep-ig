@@ -4,6 +4,7 @@ import type { Channel } from '@/lib/content';
 import { hasSufficientSourceDetail, stripSourceAttribution } from '@/lib/copy-guard';
 import {
   buildCopyInstructions,
+  captionWithHashtags,
   copyFromWordArrays,
   copyJsonSchema,
   type GeneratedCopy,
@@ -239,6 +240,8 @@ export async function POST(request: Request) {
       if (groqResult) {
         return NextResponse.json({
           ...groqResult.copy,
+          // Etiketler açıklamanın sonunda gider; kelime sayısı yalnızca düz metni sayar.
+          caption: captionWithHashtags(groqResult.copy),
           wordCounts: {
             coverTitle: wordCount(groqResult.copy.coverTitle),
             visualText: wordCount(groqResult.copy.visualText),
@@ -276,6 +279,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ...copy,
+      caption: captionWithHashtags(copy),
       wordCounts: {
         coverTitle: wordCount(copy.coverTitle),
         visualText: wordCount(copy.visualText),

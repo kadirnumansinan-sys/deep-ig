@@ -41,7 +41,9 @@
       "captionWords must form complete sentences and end with sentence punctuation. Never use clickbait or imply that missing details continue elsewhere.",
       "Never identify, cite, mention, or refer to a publisher, news agency, newspaper, website, media outlet, or source. Never write phrases such as according to, reported by, kaynağa göre, haber ajansı, or gazetesi.",
       "Never repeat a sentence, claim, clause, or sequence of four words. Each sentence must add a distinct fact from the evidence. The caption must not copy the visual sentence verbatim.",
-      "Do not use a heading, hashtags, emojis, source URL, calls to action, filler, or invented attribution in either field.",
+      "Never write the Turkish words yaratmak, mucit, or icat, or any word derived from them (yarattı, yaratıcı, yaratılan, yaratılış, yaratım, mucidi, mucidin, icadı, icatlar). Avoid their English counterparts create, creator, invent, and inventor too. Use neutral verbs such as kurmak, geliştirmek, hazırlamak, oluşturmak, açmak, or build, develop, prepare, set up.",
+      "hashtagWords must contain exactly {hashtagCount} distinct hashtags about this story, written in {language}. Each item is a single word that starts with # and has no spaces or punctuation, for example #Ankara. Base them on the concrete topic, place, actor, or field in SOURCE_DATA. Never use a publisher, news agency, website, or source name as a hashtag, and never repeat a hashtag.",
+      "Do not use a heading, emojis, source URL, calls to action, filler, or invented attribution in any field. Hashtags may appear only in hashtagWords, never in coverWords, visualWords, or captionWords.",
       "If evidence is limited, use fewer words within the allowed range instead of repeating or padding."
     ]
   }

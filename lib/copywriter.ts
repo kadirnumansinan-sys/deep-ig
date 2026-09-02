@@ -3,6 +3,7 @@ import {
   containsTeaserLanguage,
   containsPublisherLanguage,
   containsSourceAttribution,
+  forbiddenWordIn,
   hasCompleteSentenceEnding,
   hasIncompleteEnding,
   hasRepeatedPhrase,
@@ -23,17 +24,20 @@ export const captionMinimumWords = 50;
 export const captionMaximumWords = 95;
 export const visualTargetWords = 23;
 export const captionTargetWords = 74;
+export const hashtagCount = 5;
 
 export type GeneratedCopy = {
   coverTitle: string;
   visualText: string;
   caption: string;
+  hashtags: string[];
 };
 
 export type GeneratedWordArrays = {
   coverWords: string[];
   visualWords: string[];
   captionWords: string[];
+  hashtagWords: string[];
 };
 
 export function limitedText(value: unknown, maximumLength: number): string {
@@ -55,11 +59,38 @@ function splitGluedWords(word: string): string {
     .replace(/(\p{Ll}{3,})(\p{Lu})/gu, '$1 $2');
 }
 
+// Model "# Ankara", "ankara!" gibi varyantlar döndürebiliyor; tek kelimeye indirger.
+function normalizeHashtag(word: string): string {
+  const clean = limitedText(word, 60)
+    .replace(/\s+/gu, '')
+    .replace(/^#+/u, '')
+    .replace(/[^\p{L}\p{N}_]/gu, '');
+  return clean ? `#${clean}` : '';
+}
+
+function hashtagList(words: readonly string[]): string[] {
+  const tags: string[] = [];
+  for (const word of words) {
+    const tag = normalizeHashtag(word);
+    const key = tag.toLocaleLowerCase('tr-TR');
+    if (tag && !tags.some((existing) => existing.toLocaleLowerCase('tr-TR') === key)) {
+      tags.push(tag);
+    }
+  }
+  return tags;
+}
+
+/** Etiketler açıklamanın sonuna ayrı bir satırda eklenir. */
+export function captionWithHashtags(copy: GeneratedCopy): string {
+  return copy.hashtags.length ? `${copy.caption}\n\n${copy.hashtags.join(' ')}` : copy.caption;
+}
+
 export function copyFromWordArrays(parsed: Partial<GeneratedWordArrays>): GeneratedCopy | null {
   if (
     !Array.isArray(parsed.coverWords)
     || !Array.isArray(parsed.visualWords)
     || !Array.isArray(parsed.captionWords)
+    || !Array.isArray(parsed.hashtagWords)
   ) return null;
   const coverTitle = parsed.coverWords
     .map((word) => limitedText(splitGluedWords(word), 80))
@@ -73,7 +104,10 @@ export function copyFromWordArrays(parsed: Partial<GeneratedWordArrays>): Genera
     .map((word) => limitedText(splitGluedWords(word), 80))
     .filter(Boolean)
     .join(' ');
-  return coverTitle && visualText && caption ? { coverTitle, visualText, caption } : null;
+  const hashtags = hashtagList(parsed.hashtagWords);
+  return coverTitle && visualText && caption
+    ? { coverTitle, visualText, caption, hashtags }
+    : null;
 }
 
 export function sanitizeGeneratedCopy(copy: GeneratedCopy, sourceName: string): GeneratedCopy {
@@ -81,6 +115,8 @@ export function sanitizeGeneratedCopy(copy: GeneratedCopy, sourceName: string): 
     coverTitle: stripSourceAttribution(copy.coverTitle, sourceName),
     visualText: stripSourceAttribution(copy.visualText, sourceName),
     caption: stripSourceAttribution(copy.caption, sourceName),
+    // Kaynak adını etikete çeviren yanıtlar eksik kalır ve doğrulamada düzeltmeye gider.
+    hashtags: copy.hashtags.filter((tag) => !containsSourceAttribution(tag, sourceName)),
   };
 }
 
@@ -100,6 +136,18 @@ export function validationIssue(copy: GeneratedCopy, channel: Channel, sourceNam
   }
   if (captionWords < captionMinimumWords || captionWords > captionMaximumWords) {
     return `caption has ${captionWords} words; it must have ${captionMinimumWords}-${captionMaximumWords}`;
+  }
+  const forbiddenWord = forbiddenWordIn(
+    `${copy.coverTitle} ${copy.visualText} ${copy.caption} ${copy.hashtags.join(' ')}`,
+  );
+  if (forbiddenWord) {
+    return `the word "${forbiddenWord}" is forbidden; never use yaratmak, mucit, icat or any word derived from them in any field`;
+  }
+  if (
+    copy.hashtags.length !== hashtagCount
+    || copy.hashtags.some((tag) => !/^#[\p{L}\p{N}_]+$/u.test(tag))
+  ) {
+    return `hashtags must contain exactly ${hashtagCount} distinct topic hashtags; each one is a single word starting with # and must not name a publisher or source`;
   }
   if (
     containsSourceAttribution(`${copy.coverTitle} ${copy.visualText} ${copy.caption}`, sourceName)
@@ -146,6 +194,7 @@ export function buildCopyInstructions(channel: Channel, correction = ''): string
     captionMinimumWords,
     captionMaximumWords,
     captionTargetWords,
+    hashtagCount,
   }, correction);
 }
 
@@ -172,6 +221,12 @@ export const copyJsonSchema = {
       maxItems: captionMaximumWords,
       items: { type: 'string', pattern: '^\\S+$' },
     },
+    hashtagWords: {
+      type: 'array',
+      minItems: hashtagCount,
+      maxItems: hashtagCount,
+      items: { type: 'string', pattern: '^#[^\\s#]+$' },
+    },
   },
-  required: ['coverWords', 'visualWords', 'captionWords'],
+  required: ['coverWords', 'visualWords', 'captionWords', 'hashtagWords'],
 } as const;

@@ -63,6 +63,7 @@ import type {
 } from '@/components/studio/types';
 import {
   blobToDataUrl,
+  captionWordCount,
   coverageFromCandidates,
   downloadBlob,
   freshnessLabel,
@@ -778,8 +779,8 @@ export function Studio() {
       }));
       const providerLabel = body.provider === 'groq' ? `${freePoolLabel} (ücretsiz)` : 'OpenAI';
       setNotice(only === 'caption'
-        ? `Gönderi açıklaması ${providerLabel} ile yenilendi: ${body.wordCounts?.caption ?? wordCount(body.caption)} kelime. Kapak ve gönderi metni değişmedi.`
-        : `Metinler ${providerLabel} ile tamamlandı: kapak ${body.wordCounts?.coverTitle ?? wordCount(body.coverTitle)} kelime, gönderi ${body.wordCounts?.visualText ?? wordCount(body.visualText)} kelime, caption ${body.wordCounts?.caption ?? wordCount(body.caption)} kelime.`);
+        ? `Gönderi açıklaması ${providerLabel} ile yenilendi: ${body.wordCounts?.caption ?? captionWordCount(body.caption)} kelime. Kapak ve gönderi metni değişmedi.`
+        : `Metinler ${providerLabel} ile tamamlandı: kapak ${body.wordCounts?.coverTitle ?? wordCount(body.coverTitle)} kelime, gönderi ${body.wordCounts?.visualText ?? wordCount(body.visualText)} kelime, caption ${body.wordCounts?.caption ?? captionWordCount(body.caption)} kelime.`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Metinler üretilemedi.');
     } finally {
@@ -1581,10 +1582,10 @@ export function Studio() {
             </button>
 
             <label className="field-label" htmlFor="caption">
-              Gönderi açıklaması (caption) <span>{wordCount(draft.caption)} kelime · hedef 50–95</span>
+              Gönderi açıklaması (caption) <span>{captionWordCount(draft.caption)} kelime · hedef 50–95 + 5 etiket</span>
             </label>
             <textarea
-              className={`text-input ${draft.caption && (wordCount(draft.caption) < 50 || wordCount(draft.caption) > 95) ? 'field-warning' : ''}`}
+              className={`text-input ${draft.caption && (captionWordCount(draft.caption) < 50 || captionWordCount(draft.caption) > 95) ? 'field-warning' : ''}`}
               id="caption"
               maxLength={1_400}
               onChange={(event) => updateDraft({ caption: event.target.value })}

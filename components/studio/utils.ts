@@ -78,6 +78,13 @@ export function wordCount(value: string): number {
   return value.trim() ? value.trim().split(/\s+/u).length : 0;
 }
 
+// Açıklamanın sonundaki 5 etiket hedef kelime aralığına dahil değil.
+export function captionWordCount(value: string): number {
+  return value.trim()
+    ? value.trim().split(/\s+/u).filter((word) => !word.startsWith('#')).length
+    : 0;
+}
+
 export function downloadBlob(blob: Blob, name: string) {
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
