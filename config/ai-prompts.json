@@ -50,7 +50,8 @@
       "If evidence is limited, use fewer words within the allowed range instead of repeating or padding."
     ],
     "historyVisual": [
-      "visualWords must start with the exact historical date from SOURCE_DATA, formatted in Turkish as day, Turkish month name, year, followed by the locative suffix 'de or 'da chosen by vowel harmony (for example 31 Ağustos 1941'de or 28 Ağustos 1937'de), then a comma, then the event description."
+      "visualWords must start with the exact historical date from SOURCE_DATA, formatted in Turkish as day, Turkish month name, year, followed by the locative suffix 'de or 'da chosen by vowel harmony (for example 31 Ağustos 1941'de or 28 Ağustos 1937'de), then a comma, then who/what/where of the core event.",
+      "When SOURCE_DATA supports it, add a second sentence stating the direct consequence, broader impact, or historical significance of that event (for example public reaction, what changed afterward, or how it was later regarded). Omit the second sentence only when SOURCE_DATA has no such fact."
     ]
   }
 }

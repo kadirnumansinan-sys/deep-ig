@@ -947,15 +947,6 @@ button { color: inherit; }
 }
 .detail-copy.copy-compact { font-size: 3.42cqw; line-height: 1.38; }
 .detail-copy.copy-dense { font-size: 3.08cqw; line-height: 1.34; }
-/* History gönderi metni: ortalanmış, kartın üst-orta bölümünde. */
-.detail-canvas.theme-history .detail-copy {
-  bottom: auto;
-  left: 10%;
-  max-width: 80%;
-  text-align: center;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
-  top: 30%;
-}
 .asset-note { color: #919399; font-size: 7px; margin: 8px 0 0; text-align: center; }
 .music-panel {
   background: white;
