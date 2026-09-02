@@ -53,7 +53,10 @@ const detailOverlays: Record<Channel, string> = {
 const railArtwork: Record<Channel, string> = {
   history: '/assets/deepbrief/rails/deepbrief-detail-rail.png',
   news: '/assets/deepbrief/rails/deepbrief-news-detail-rail.png',
-  international: '/assets/deepbrief/rails/deepbrief-detail-rail.png',
+  // History rayında sol üstte kırmızı-mavi "D" işareti gömülü; international'ın yuvarlak
+  // avatarı onu tamamen kapatmadığı için sol tarafta alakasız mavi bir şekil kalıyordu.
+  // News rayının gömülü dairesi avatarla birebir örtüşüyor.
+  international: '/assets/deepbrief/rails/deepbrief-news-detail-rail.png',
   media: '/assets/deepbrief/rails/deepbrief-detail-rail.png',
 };
 
