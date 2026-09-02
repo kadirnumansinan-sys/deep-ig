@@ -38,6 +38,16 @@ import {
 } from '@/lib/copy-guard';
 import { loadStudioState, saveStudioState } from '@/lib/draft-storage';
 import { isLanguageMatch } from '@/lib/language';
+import { MusicPicker, type MusicSelection } from '@/components/music-picker';
+import { musicCredit, suggestTrack, trackById, trackUrl } from '@/lib/music/catalog';
+import { loadReelAudio } from '@/lib/video/audio';
+import {
+  encodeReel,
+  videoExportSupported,
+  REEL_DURATION_SEC,
+  REEL_SOURCE_SCALE,
+  REEL_WIDTH,
+} from '@/lib/video/encode-reel';
 
 type ImageOption = {
   src: string;
@@ -58,6 +68,11 @@ type Draft = DraftContent & {
   imageOptions: ImageOption[];
   sourceFreshnessStatus: FreshnessStatus;
 };
+
+// next.config.ts bu üçünü derleme sırasında hesaplar; webpack DefinePlugin satır içine gömer.
+const appVersion = process.env.NEXT_PUBLIC_APP_VERSION || '0.0.0';
+const appBuild = process.env.NEXT_PUBLIC_APP_BUILD || 'dev';
+const appCommit = process.env.NEXT_PUBLIC_APP_COMMIT || 'local';
 
 const channels: Array<{ id: Channel; label: string; language: string }> = [
   { id: 'history', label: 'History', language: 'TR' },
@@ -520,6 +535,13 @@ export function Studio() {
   const [miniPreviewOpen, setMiniPreviewOpen] = useState(false);
   const [isNarrow, setIsNarrow] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const [musicSelection, setMusicSelection] = useState<Record<Channel, MusicSelection | null>>(() => ({
+    history: null,
+    news: null,
+    international: null,
+    media: null,
+  }));
   const [enrichingId, setEnrichingId] = useState('');
   const [upscaling, setUpscaling] = useState(false);
   const [localEnhancing, setLocalEnhancing] = useState(false);
@@ -541,6 +563,24 @@ export function Studio() {
   const coverRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
   const draft = drafts[channel];
+
+  // Her kanala ilk açılışta ruh haline uygun bir parça ata; kullanıcı sonra değiştirebilir.
+  // Seçim rastgele olduğu için useState başlatıcısında yapılamaz: SSR ile hydration uyuşmazdı.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMusicSelection((current) => {
+      let changed = false;
+      const next = { ...current };
+      for (const item of channels) {
+        if (next[item.id]) continue;
+        const track = suggestTrack(item.id);
+        if (!track) continue;
+        next[item.id] = { id: track.id, startSec: track.startSec };
+        changed = true;
+      }
+      return changed ? next : current;
+    });
+  }, []);
 
   const today = useMemo(() => new Intl.DateTimeFormat('tr-TR', {
     timeZone: 'Europe/Istanbul',
@@ -1315,13 +1355,14 @@ export function Studio() {
   async function exportPackage() {
     if (!coverRef.current || !detailRef.current) return;
     setExporting(true);
+    setExportProgress(0);
     setNotice('1080 × 1920 dosyalar hazırlanıyor…');
     try {
       await document.fonts.ready;
       await Promise.all([waitForImages(coverRef.current), waitForImages(detailRef.current)]);
 
-      async function render(node: HTMLDivElement) {
-        const ratio = 1080 / node.offsetWidth;
+      async function render(node: HTMLDivElement, targetWidth = REEL_WIDTH) {
+        const ratio = targetWidth / node.offsetWidth;
         return toJpeg(node, {
           quality: 0.96,
           pixelRatio: ratio,
@@ -1348,12 +1389,54 @@ export function Studio() {
         `Konum: ${draft.location || '-'}`,
         `Tazelik: ${draft.sourceFreshnessStatus}`,
       ].join('\n'));
+
+      // Gönderi kartından 7 saniyelik, hafif zoom'lu MP4. Kapak görseli JPG olarak kalır.
+      let videoNote = 'video eklenmedi';
+      if (videoExportSupported()) {
+        setNotice('7 saniyelik video hazırlanıyor…');
+        const selection = musicSelection[channel];
+        const track = selection ? trackById(selection.id) : null;
+        // Zoom'un hiçbir anında büyütme olmaması için kaynak kareyi 1080'in üstünde üret.
+        const frameSource = await render(detailRef.current, Math.round(REEL_WIDTH * REEL_SOURCE_SCALE));
+        const bitmap = await createImageBitmap(await (await fetch(frameSource)).blob());
+        let audio = null;
+        let musicNote = 'müziksiz';
+        if (track && selection) {
+          try {
+            audio = await loadReelAudio({
+              url: trackUrl(track),
+              startSec: selection.startSec,
+              durationSec: REEL_DURATION_SEC,
+              gain: track.gain,
+            });
+            musicNote = track.title;
+          } catch {
+            musicNote = 'müzik yüklenemedi, sessiz';
+          }
+        }
+        try {
+          const { blob, hasAudio } = await encodeReel({
+            image: bitmap,
+            audio,
+            onProgress: setExportProgress,
+          });
+          zip.file(`${base}-gonderi.mp4`, blob);
+          if (track && hasAudio) zip.file(`${base}-muzik.txt`, musicCredit(track));
+          videoNote = hasAudio ? `video: ${musicNote}` : 'video: sessiz';
+        } finally {
+          bitmap.close();
+        }
+      } else {
+        videoNote = 'video atlandı (tarayıcı desteklemiyor, Chrome/Edge gerekli)';
+      }
+
       downloadBlob(await zip.generateAsync({ type: 'blob' }), `${base}.zip`);
-      setNotice('Reels paketi indirildi: thumbnail, gönderi, caption ve kaynak notu.');
+      setNotice(`Reels paketi indirildi: thumbnail, gönderi, caption, kaynak notu · ${videoNote}.`);
     } catch (error) {
       setNotice(error instanceof Error ? `Dışa aktarma başarısız: ${error.message}` : 'Dışa aktarma başarısız.');
     } finally {
       setExporting(false);
+      setExportProgress(0);
     }
   }
 
@@ -1365,6 +1448,10 @@ export function Studio() {
           <span>
             <strong>Deepbrief</strong>
             <small>CONTENT STUDIO</small>
+          </span>
+          <span className="brand-version" title={`Sürüm ${appVersion} · derleme ${appBuild} · commit ${appCommit}`}>
+            v{appVersion}
+            <em>{appBuild}</em>
           </span>
         </div>
         <div className="topbar-status">
@@ -1756,7 +1843,15 @@ export function Studio() {
               {captionOnlyBusy ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
               <span>
                 <strong>{captionOnlyBusy ? 'Açıklama üretiliyor…' : 'Sadece açıklamayı üret'}</strong>
-                <small>Kapak başlığı ve gönderi metni olduğu gibi kalır</small>
+                <small>
+                  {copyConfigured === null
+                    ? 'API durumu kontrol ediliyor'
+                    : groqCopy?.configured
+                      ? 'Sadece caption · önce Groq (ücretsiz) · gerekirse OpenAI'
+                      : copyConfigured
+                        ? 'Sadece caption · GPT-5.6 Luna · ücretli'
+                        : 'GROQ_API_KEY_1 veya OPENAI_API_KEY gerekli'}
+                </small>
               </span>
             </button>
 
@@ -1811,13 +1906,23 @@ export function Studio() {
             </div>
           </div>
           <ReelPreview channel={channel} coverRef={coverRef} detailRef={detailRef} draft={draft} />
+          <MusicPicker
+            channel={channel}
+            disabled={exporting}
+            onChange={(selection) => setMusicSelection((current) => ({ ...current, [channel]: selection }))}
+            selection={musicSelection[channel]}
+          />
           <div className="export-panel">
             <div>
               <Download size={16} />
-              <span><strong>Paylaşıma hazır paket</strong><small>2 adet 1080 × 1920 JPG + caption + kaynak notu</small></span>
+              <span><strong>Paylaşıma hazır paket</strong><small>2 adet 1080 × 1920 JPG + 7 sn MP4 + caption + kaynak notu</small></span>
             </div>
             <button disabled={exporting} onClick={() => void exportPackage()} type="button">
-              {exporting ? 'Hazırlanıyor…' : 'ZIP olarak indir'}
+              {exporting
+                ? exportProgress > 0
+                  ? `Video %${Math.round(exportProgress * 100)}`
+                  : 'Hazırlanıyor…'
+                : 'ZIP olarak indir'}
             </button>
           </div>
         </section>

@@ -1,6 +1,6 @@
 {
   "name": "deepbrief-content-studio",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "node --experimental-sqlite node_modules/next/dist/bin/next start",
     "lint": "eslint app components lib vite.config.ts next.config.ts",
+    "music:scan": "node scripts/music-scan.mjs",
     "test": "node --experimental-sqlite --import tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
@@ -22,11 +23,12 @@
     "html-to-image": "^1.11.13",
     "jszip": "^3.10.1",
     "lucide-react": "^1.38.0",
+    "mp4-muxer": "^5.2.2",
     "next": "16.3.3",
+    "qrcode": "^1.5.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "react-icons": "^5.7.0",
-    "qrcode": "^1.5.4"
+    "react-icons": "^5.7.0"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.54.2",
@@ -34,9 +36,9 @@
     "@openai/sites-vite-plugin": "^0.1.0 || ^0.2.0",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
-    "@types/qrcode": "^1.5.6",
     "@vitejs/plugin-react": "6.0.2",
     "@vitejs/plugin-rsc": "0.5.34",
     "eslint": "9.39.4",

@@ -1,0 +1,290 @@
+[
+  {
+    "id": "anguish",
+    "title": "Anguish",
+    "artist": "Kevin MacLeod",
+    "file": "anguish.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Anguish",
+    "attributionRequired": true,
+    "moods": [
+      "somber",
+      "cinematic"
+    ],
+    "lengthSec": 37,
+    "startSec": 4,
+    "gain": 0.55
+  },
+  {
+    "id": "ashton-manor",
+    "title": "Ashton Manor",
+    "artist": "Kevin MacLeod",
+    "file": "ashton-manor.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Ashton+Manor",
+    "attributionRequired": true,
+    "moods": [
+      "somber",
+      "documentary"
+    ],
+    "lengthSec": 30,
+    "startSec": 4,
+    "gain": 0.55
+  },
+  {
+    "id": "blip-stream",
+    "title": "Blip Stream",
+    "artist": "Kevin MacLeod",
+    "file": "blip-stream.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Blip+Stream",
+    "attributionRequired": true,
+    "moods": [
+      "electronic",
+      "uplifting"
+    ],
+    "lengthSec": 37,
+    "startSec": 6,
+    "gain": 0.5
+  },
+  {
+    "id": "carefree",
+    "title": "Carefree",
+    "artist": "Kevin MacLeod",
+    "file": "carefree.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Carefree",
+    "attributionRequired": true,
+    "moods": [
+      "uplifting",
+      "neutral"
+    ],
+    "lengthSec": 37,
+    "startSec": 6,
+    "gain": 0.5
+  },
+  {
+    "id": "darkness-speaks",
+    "title": "Darkness Speaks",
+    "artist": "Kevin MacLeod",
+    "file": "darkness-speaks.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Darkness+Speaks",
+    "attributionRequired": true,
+    "moods": [
+      "tense",
+      "cinematic"
+    ],
+    "lengthSec": 25,
+    "startSec": 3,
+    "gain": 0.55
+  },
+  {
+    "id": "deliberate-thought",
+    "title": "Deliberate Thought",
+    "artist": "Kevin MacLeod",
+    "file": "deliberate-thought.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Deliberate+Thought",
+    "attributionRequired": true,
+    "moods": [
+      "somber",
+      "neutral"
+    ],
+    "lengthSec": 27,
+    "startSec": 4,
+    "gain": 0.55
+  },
+  {
+    "id": "digital-lemonade",
+    "title": "Digital Lemonade",
+    "artist": "Kevin MacLeod",
+    "file": "digital-lemonade.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Digital+Lemonade",
+    "attributionRequired": true,
+    "moods": [
+      "electronic",
+      "uplifting"
+    ],
+    "lengthSec": 37,
+    "startSec": 6,
+    "gain": 0.5
+  },
+  {
+    "id": "echoes-of-time",
+    "title": "Echoes of Time",
+    "artist": "Kevin MacLeod",
+    "file": "echoes-of-time.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Echoes+of+Time",
+    "attributionRequired": true,
+    "moods": [
+      "cinematic",
+      "tense"
+    ],
+    "lengthSec": 30,
+    "startSec": 4,
+    "gain": 0.55
+  },
+  {
+    "id": "heroic-age",
+    "title": "Heroic Age",
+    "artist": "Kevin MacLeod",
+    "file": "heroic-age.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Heroic+Age",
+    "attributionRequired": true,
+    "moods": [
+      "cinematic",
+      "neutral"
+    ],
+    "lengthSec": 30,
+    "startSec": 4,
+    "gain": 0.55
+  },
+  {
+    "id": "immersed",
+    "title": "Immersed",
+    "artist": "Kevin MacLeod",
+    "file": "immersed.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Immersed",
+    "attributionRequired": true,
+    "moods": [
+      "cinematic",
+      "neutral"
+    ],
+    "lengthSec": 37,
+    "startSec": 5,
+    "gain": 0.55
+  },
+  {
+    "id": "impending-boom",
+    "title": "Impending Boom",
+    "artist": "Kevin MacLeod",
+    "file": "impending-boom.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Impending+Boom",
+    "attributionRequired": true,
+    "moods": [
+      "tense",
+      "cinematic"
+    ],
+    "lengthSec": 130,
+    "startSec": 8,
+    "gain": 0.55
+  },
+  {
+    "id": "investigations",
+    "title": "Investigations",
+    "artist": "Kevin MacLeod",
+    "file": "investigations.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Investigations",
+    "attributionRequired": true,
+    "moods": [
+      "documentary",
+      "tense"
+    ],
+    "lengthSec": 30,
+    "startSec": 4,
+    "gain": 0.55
+  },
+  {
+    "id": "life-of-riley",
+    "title": "Life of Riley",
+    "artist": "Kevin MacLeod",
+    "file": "life-of-riley.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Life+of+Riley",
+    "attributionRequired": true,
+    "moods": [
+      "uplifting",
+      "neutral"
+    ],
+    "lengthSec": 37,
+    "startSec": 6,
+    "gain": 0.5
+  },
+  {
+    "id": "lightless-dawn",
+    "title": "Lightless Dawn",
+    "artist": "Kevin MacLeod",
+    "file": "lightless-dawn.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Lightless+Dawn",
+    "attributionRequired": true,
+    "moods": [
+      "somber",
+      "cinematic"
+    ],
+    "lengthSec": 30,
+    "startSec": 4,
+    "gain": 0.55
+  },
+  {
+    "id": "ominous",
+    "title": "Ominous",
+    "artist": "Kevin MacLeod",
+    "file": "ominous.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Ominous",
+    "attributionRequired": true,
+    "moods": [
+      "tense",
+      "documentary"
+    ],
+    "lengthSec": 28,
+    "startSec": 4,
+    "gain": 0.55
+  },
+  {
+    "id": "static-motion",
+    "title": "Static Motion",
+    "artist": "Kevin MacLeod",
+    "file": "static-motion.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Static+Motion",
+    "attributionRequired": true,
+    "moods": [
+      "tense",
+      "electronic"
+    ],
+    "lengthSec": 30,
+    "startSec": 4,
+    "gain": 0.55
+  },
+  {
+    "id": "thinking-music",
+    "title": "Thinking Music",
+    "artist": "Kevin MacLeod",
+    "file": "thinking-music.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Thinking+Music",
+    "attributionRequired": true,
+    "moods": [
+      "documentary",
+      "neutral"
+    ],
+    "lengthSec": 37,
+    "startSec": 5,
+    "gain": 0.55
+  },
+  {
+    "id": "wallpaper",
+    "title": "Wallpaper",
+    "artist": "Kevin MacLeod",
+    "file": "wallpaper.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Wallpaper",
+    "attributionRequired": true,
+    "moods": [
+      "neutral",
+      "documentary"
+    ],
+    "lengthSec": 30,
+    "startSec": 4,
+    "gain": 0.55
+  }
+]
