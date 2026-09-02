@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireApiAuth } from '@/lib/auth';
 import type { Channel } from '@/lib/content';
 import { isAccountConfigured } from '@/lib/instagram/accounts';
+import { publishImmediately } from '@/lib/scheduler/immediate';
 import {
   cancelPost,
   insertPost,
@@ -12,6 +13,8 @@ import {
 } from '@/lib/scheduler/store';
 
 export const dynamic = 'force-dynamic';
+// "Şimdi paylaş" isteği Instagram konteynerinin hazır olmasını bekler; Hobby planındaki üst sınır.
+export const maxDuration = 60;
 
 const channels: Channel[] = ['history', 'news', 'international', 'media'];
 const channelSet = new Set<Channel>(channels);
@@ -129,13 +132,19 @@ export async function POST(request: Request) {
     return jsonError(error instanceof Error ? error.message : 'Medya adresi geçersiz.', 400);
   }
 
-  const scheduledAt = new Date(typeof input.scheduledAt === 'string' ? input.scheduledAt : '');
-  if (Number.isNaN(scheduledAt.getTime())) return jsonError('Yayın saati geçersiz.', 400);
-  const now = Date.now();
-  // Bir dakikalık tolerans: kullanıcı "şimdi" seçtiğinde istek yolda saniyeler kaybediyor.
-  if (scheduledAt.getTime() < now - 60_000) return jsonError('Yayın saati geçmişte olamaz.', 400);
-  if (scheduledAt.getTime() > now + MAX_SCHEDULE_AHEAD_MS) {
-    return jsonError('Yayın saati en fazla 90 gün sonrası olabilir.', 400);
+  // `publishNow` ile saat sorulmaz: kayıt şimdiki zamana yazılır ve yayın aynı istekte başlatılır.
+  const publishNow = input.publishNow === true;
+  const scheduledAt = publishNow
+    ? new Date()
+    : new Date(typeof input.scheduledAt === 'string' ? input.scheduledAt : '');
+  if (!publishNow) {
+    if (Number.isNaN(scheduledAt.getTime())) return jsonError('Yayın saati geçersiz.', 400);
+    const now = Date.now();
+    // Bir dakikalık tolerans: kullanıcı "şimdi" seçtiğinde istek yolda saniyeler kaybediyor.
+    if (scheduledAt.getTime() < now - 60_000) return jsonError('Yayın saati geçmişte olamaz.', 400);
+    if (scheduledAt.getTime() > now + MAX_SCHEDULE_AHEAD_MS) {
+      return jsonError('Yayın saati en fazla 90 gün sonrası olabilir.', 400);
+    }
   }
 
   const caption = (typeof input.caption === 'string' ? input.caption : '').trim().slice(0, MAX_CAPTION);
@@ -149,7 +158,9 @@ export async function POST(request: Request) {
       coverUrl,
       scheduledAt,
     });
-    return ok({ post: serialize(post) });
+    if (!publishNow) return ok({ post: serialize(post) });
+    const publish = await publishImmediately(post);
+    return ok({ post: { ...serialize(post), status: publish.status }, publish });
   } catch (error) {
     return failure(error);
   }

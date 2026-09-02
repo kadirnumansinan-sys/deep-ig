@@ -169,3 +169,38 @@ test('geçerli istek kuyruk yapılandırması yokken 503 döner', async () => {
   assert.equal(status, 503);
   assert.match(payload.error || '', /DATABASE_URL/);
 });
+
+test('şimdi paylaş saat istemez', async () => {
+  const { status, payload } = await schedule({
+    channel: 'news',
+    caption: 'Test',
+    videoUrl: blobVideo,
+    coverUrl: blobCover,
+    publishNow: true,
+  });
+  // Saat doğrulaması atlanır; istek yalnızca kuyruk yapılandırması yok diye durur.
+  assert.equal(status, 503);
+  assert.doesNotMatch(payload.error || '', /Yayın saati/);
+});
+
+test('şimdi paylaş geçmiş saati de görmezden gelir', async () => {
+  const { status } = await schedule({
+    channel: 'news',
+    videoUrl: blobVideo,
+    coverUrl: blobCover,
+    publishNow: true,
+    scheduledAt: new Date(Date.now() - 86_400_000).toISOString(),
+  });
+  assert.equal(status, 503);
+});
+
+test('şimdi paylaş medya doğrulamasını atlamaz', async () => {
+  const { status, payload } = await schedule({
+    channel: 'news',
+    videoUrl: 'https://example.com/kotu.mp4',
+    coverUrl: blobCover,
+    publishNow: true,
+  });
+  assert.equal(status, 400);
+  assert.match(payload.error || '', /Vercel Blob/);
+});

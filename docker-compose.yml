@@ -21,11 +21,44 @@ services:
       GROQ_GAP_CACHE_HOURS: ${GROQ_GAP_CACHE_HOURS:-6}
       GROQ_COPY_MODEL: ${GROQ_COPY_MODEL:-openai/gpt-oss-120b}
       GROQ_DAILY_COPY_LIMIT: ${GROQ_DAILY_COPY_LIMIT:-30}
+      # Ücretsiz havuzun diğer sağlayıcıları. Günlük sınırlar boş bırakılırsa kod içindeki
+      # varsayılan kullanılır; Cerebras'ta varsayılan anahtar sayısıyla çarpılır.
+      CEREBRAS_API_KEY: ${CEREBRAS_API_KEY:-}
+      CEREBRAS_API_KEY2: ${CEREBRAS_API_KEY2:-}
+      CEREBRAS_ANALYSIS_MODEL: ${CEREBRAS_ANALYSIS_MODEL:-gpt-oss-120b}
+      CEREBRAS_COPY_MODEL: ${CEREBRAS_COPY_MODEL:-gpt-oss-120b}
+      CEREBRAS_DAILY_ANALYSIS_LIMIT: ${CEREBRAS_DAILY_ANALYSIS_LIMIT:-}
+      CEREBRAS_DAILY_COPY_LIMIT: ${CEREBRAS_DAILY_COPY_LIMIT:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_ANALYSIS_MODEL: ${GEMINI_ANALYSIS_MODEL:-gemini-2.5-flash}
+      GEMINI_COPY_MODEL: ${GEMINI_COPY_MODEL:-gemini-2.5-flash}
+      GEMINI_DAILY_ANALYSIS_LIMIT: ${GEMINI_DAILY_ANALYSIS_LIMIT:-60}
+      GEMINI_DAILY_COPY_LIMIT: ${GEMINI_DAILY_COPY_LIMIT:-40}
       DISCOVERY_RECENT_HOURS: ${DISCOVERY_RECENT_HOURS:-8}
       DISCOVERY_GOOGLE_NEWS_ITEMS: ${DISCOVERY_GOOGLE_NEWS_ITEMS:-100}
       DISCOVERY_PUBLISHER_FEED_ITEMS: ${DISCOVERY_PUBLISHER_FEED_ITEMS:-120}
       DISCOVERY_GDELT_MAX_RECORDS: ${DISCOVERY_GDELT_MAX_RECORDS:-180}
       INTERNAL_POLL_TOKEN: ${INTERNAL_POLL_TOKEN:-deepbrief-internal-local-only}
+      # --- Planlı Instagram yayını ---
+      # Kuyruk Postgres'te tutulur (Neon vb.); SQLite volume'ü bu iş için kullanılmaz.
+      DATABASE_URL: ${DATABASE_URL:-}
+      # Medya deposu: Instagram video_url/cover_url'yi herkese açık HTTPS adresinden çeker.
+      BLOB_READ_WRITE_TOKEN: ${BLOB_READ_WRITE_TOKEN:-}
+      # Boş bırakılırsa yayın uç noktası INTERNAL_POLL_TOKEN'ı kabul eder.
+      DEEPBRIEF_CRON_TOKEN: ${DEEPBRIEF_CRON_TOKEN:-}
+      IG_GRAPH_VERSION: ${IG_GRAPH_VERSION:-v25.0}
+      IG_NEWS_USER_ID: ${IG_NEWS_USER_ID:-}
+      IG_NEWS_TOKEN: ${IG_NEWS_TOKEN:-}
+      IG_NEWS_HOST: ${IG_NEWS_HOST:-}
+      IG_MEDIA_USER_ID: ${IG_MEDIA_USER_ID:-}
+      IG_MEDIA_TOKEN: ${IG_MEDIA_TOKEN:-}
+      IG_MEDIA_HOST: ${IG_MEDIA_HOST:-}
+      IG_INTERNATIONAL_USER_ID: ${IG_INTERNATIONAL_USER_ID:-}
+      IG_INTERNATIONAL_TOKEN: ${IG_INTERNATIONAL_TOKEN:-}
+      IG_INTERNATIONAL_HOST: ${IG_INTERNATIONAL_HOST:-}
+      IG_HISTORY_USER_ID: ${IG_HISTORY_USER_ID:-}
+      IG_HISTORY_TOKEN: ${IG_HISTORY_TOKEN:-}
+      IG_HISTORY_HOST: ${IG_HISTORY_HOST:-}
       AUTH_REQUIRED: ${AUTH_REQUIRED:-false}
       AUTH_SECRET: ${AUTH_SECRET:-}
       AUTH_BOOTSTRAP_EMAIL: ${AUTH_BOOTSTRAP_EMAIL:-}
@@ -60,6 +93,30 @@ services:
       - /bin/sh
       - -c
       - 'while true; do wget -q -T 240 --header="X-Deepbrief-Internal: $${INTERNAL_POLL_TOKEN}" --post-data="poll=1" -O /dev/null http://deepbrief:3000/api/internal/poll || true; sleep "$${POLL_INTERVAL_SECONDS}"; done'
+    depends_on:
+      deepbrief:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+
+  # Planlı/anlık Instagram yayınını yürütür: zamanı gelen kayda Reels konteyneri açar,
+  # sonraki turda konteyner hazır olduğunda yayınlar. Vercel'deki harici cron'un karşılığı.
+  # DATABASE_URL boşken uç nokta 503 döner; servis çalışsa da bir şey yapmaz.
+  publisher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: deepbrief-content-publisher
+    environment:
+      INTERNAL_POLL_TOKEN: ${INTERNAL_POLL_TOKEN:-deepbrief-internal-local-only}
+      DEEPBRIEF_CRON_TOKEN: ${DEEPBRIEF_CRON_TOKEN:-}
+      PUBLISH_INTERVAL_SECONDS: ${PUBLISH_INTERVAL_SECONDS:-300}
+    entrypoint: []
+    command:
+      - /bin/sh
+      - -c
+      - 'TOKEN="$${DEEPBRIEF_CRON_TOKEN:-$${INTERNAL_POLL_TOKEN}}"; while true; do wget -q -T 120 --header="X-Deepbrief-Internal: $${TOKEN}" --post-data="publish=1" -O /dev/null http://deepbrief:3000/api/internal/publish || true; sleep "$${PUBLISH_INTERVAL_SECONDS}"; done'
     depends_on:
       deepbrief:
         condition: service_healthy

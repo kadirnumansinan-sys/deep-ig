@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarClock, ExternalLink, X } from 'lucide-react';
+import { CalendarClock, ExternalLink, Send, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import type { Channel } from '@/lib/content';
 
@@ -88,10 +88,11 @@ type Props = {
   busy: boolean;
   channel: Channel;
   progress: number;
+  onPublishNow: () => Promise<void>;
   onSchedule: (scheduledAt: Date) => Promise<void>;
 };
 
-export function SchedulePanel({ busy, channel, progress, onSchedule }: Props) {
+export function SchedulePanel({ busy, channel, progress, onPublishNow, onSchedule }: Props) {
   const [when, setWhen] = useState(defaultValue);
   const [queue, setQueue] = useState<QueueResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -143,6 +144,20 @@ export function SchedulePanel({ busy, channel, progress, onSchedule }: Props) {
     }
   }
 
+  // "Şimdi paylaş" saat sormaz; kayıt oluşturulur ve yayın aynı istekte başlatılır.
+  async function handlePublishNow() {
+    setPending(true);
+    setError(null);
+    try {
+      await onPublishNow();
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Yayın gönderilemedi.');
+    } finally {
+      setPending(false);
+    }
+  }
+
   async function handleCancel(id: string) {
     try {
       const response = await fetch(`/api/schedule?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
@@ -181,6 +196,15 @@ export function SchedulePanel({ busy, channel, progress, onSchedule }: Props) {
         />
         <button disabled={working || !accountReady || !storageReady} onClick={() => void handleSchedule()} type="button">
           {working ? (progress > 0 ? `Video %${Math.round(progress * 100)}` : 'Hazırlanıyor…') : 'Planla'}
+        </button>
+        <button
+          className="schedule-now"
+          disabled={working || !accountReady || !storageReady}
+          onClick={() => void handlePublishNow()}
+          type="button"
+        >
+          <Send size={11} />
+          Şimdi paylaş
         </button>
       </div>
 

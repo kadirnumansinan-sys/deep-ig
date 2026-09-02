@@ -157,12 +157,20 @@ const limitEnvPrefix: Record<PoolProvider, string> = {
   gemini: 'GEMINI',
 };
 
+// Cerebras anahtarları ayrı hesaplara ait olduğu için her biri kendi kotasını getirir.
+function cerebrasKeys(): string[] {
+  return [process.env.CEREBRAS_API_KEY, process.env.CEREBRAS_API_KEY2]
+    .map((raw) => raw?.trim())
+    .filter((key): key is string => Boolean(key));
+}
+
 function taskLimit(provider: PoolProvider, task: GroqTask): number {
   const suffix = task === 'analysis' ? 'ANALYSIS' : task === 'copy' ? 'COPY' : 'SEARCH';
-  return positiveInteger(
-    process.env[`${limitEnvPrefix[provider]}_DAILY_${suffix}_LIMIT`],
-    limitDefaults[provider][task],
-  );
+  // Varsayılan güvenlik sınırı anahtar sayısıyla ölçeklenir; env ile verilen değer mutlaktır.
+  const fallback = provider === 'cerebras'
+    ? limitDefaults[provider][task] * Math.max(1, cerebrasKeys().length)
+    : limitDefaults[provider][task];
+  return positiveInteger(process.env[`${limitEnvPrefix[provider]}_DAILY_${suffix}_LIMIT`], fallback);
 }
 
 function taskLabel(task: GroqTask): string {
@@ -188,13 +196,14 @@ function groqModel(task: GroqTask): string {
 // Öncelik sırası (slot numarası = deneme sırası):
 //   1) Gemini    — birincil ücretsiz katman
 //   2) Cerebras  — ~1M token/gün, en hızlı çıkarım; Gemini RPM'e takılınca devralır
+//      (CEREBRAS_API_KEY, sonra varsa CEREBRAS_API_KEY2 — her anahtar kendi kotasını getirir)
 //   3) Groq #1   — en son denenir; dar kotası arama görevi için korunur
 //   4) Groq #2
 // `search` görevi yalnızca Groq'ta çalışır: `groq/compound` modelinin dahili web
 // araması başka sağlayıcıda karşılığı olmadığı için devredilemez.
 function configuredSlots(task: GroqTask): ProviderSlot[] {
   const slots: ProviderSlot[] = [];
-  const cerebrasKey = process.env.CEREBRAS_API_KEY?.trim();
+  const cerebras = cerebrasKeys();
   const geminiKey = process.env.GEMINI_API_KEY?.trim();
 
   if (task !== 'search' && geminiKey) {
@@ -216,20 +225,22 @@ function configuredSlots(task: GroqTask): ProviderSlot[] {
     });
   }
 
-  if (task !== 'search' && cerebrasKey) {
-    slots.push({
-      slot: 2,
-      provider: 'cerebras',
-      label: 'Cerebras',
-      endpoint: cerebrasEndpoint,
-      key: cerebrasKey,
-      model: envValue(
-        task === 'copy' ? 'CEREBRAS_COPY_MODEL' : 'CEREBRAS_ANALYSIS_MODEL',
-        defaultCerebrasModel,
-      ),
-      supportsReasoningEffort: true,
-      supportsMaxCompletionTokens: true,
-      supportsStrictSchema: true,
+  if (task !== 'search') {
+    cerebras.forEach((key, index) => {
+      slots.push({
+        slot: 2 + index,
+        provider: 'cerebras',
+        label: cerebras.length > 1 ? `Cerebras #${index + 1}` : 'Cerebras',
+        endpoint: cerebrasEndpoint,
+        key,
+        model: envValue(
+          task === 'copy' ? 'CEREBRAS_COPY_MODEL' : 'CEREBRAS_ANALYSIS_MODEL',
+          defaultCerebrasModel,
+        ),
+        supportsReasoningEffort: true,
+        supportsMaxCompletionTokens: true,
+        supportsStrictSchema: true,
+      });
     });
   }
 
@@ -237,7 +248,8 @@ function configuredSlots(task: GroqTask): ProviderSlot[] {
     const key = raw?.trim();
     if (!key) return;
     slots.push({
-      slot: 3 + index,
+      // Groq numaraları sabit: Cerebras anahtar sayısı değişse de slot kimlikleri kaymaz.
+      slot: 10 + index,
       provider: 'groq',
       label: `Groq #${index + 1}`,
       endpoint: groqEndpoint,
@@ -1000,7 +1012,7 @@ export function groqStatus() {
     searchModel: process.env.GROQ_SEARCH_MODEL?.trim() || defaultSearchModel,
     copyModel: groqCopyModel(),
     keysShareQuota: keysShareQuota(),
-    // Deneme sırası: Gemini → Cerebras → Groq #1 → Groq #2.
+    // Deneme sırası: Gemini → Cerebras (#1, #2) → Groq #1 → Groq #2.
     providerOrder: slots.map((slot) => slot.label),
     usage: {
       date: dailyUsage.date,

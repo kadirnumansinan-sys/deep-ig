@@ -50,6 +50,8 @@ Kimlik doğrulama `AUTH_REQUIRED=true` yapıldığında etkinleşir. İlk sahibi
 
 Studio’daki **Planlı Instagram yayını** panelinden bir saat seçilir; medya tarayıcıda üretilir, Vercel Blob’a yüklenir ve kuyruğa yazılır. Yayını `/api/internal/publish` uç noktası yapar: zamanı gelen kayıt için Reels konteyneri oluşturur, sonraki tetiklemede konteyner hazır olduğunda yayınlar. Kanal → hesap eşleşmesi birebirdir (`news`, `media`, `international`, `history`).
 
+Aynı paneldeki **Şimdi paylaş** düğmesi saat sormaz: kayıt anında kuyruğa yazılır ve yayın aynı istekte başlatılır. Konteyner hazır olursa gönderi hemen yayınlanır; Instagram videoyu işlemeye devam ediyorsa kayıt `İşleniyor` durumunda kalır ve yayını cron tamamlar. Her iki yolda da gönderilen içerik aynıdır: MP4 video, kapak görseli videonun küçük resmi (`cover_url`) olarak, açıklama alanı ve seçilen müzik videonun içinde.
+
 Kurulum (Vercel):
 
 1. **Storage → Blob store** oluştur (**Public**). `BLOB_READ_WRITE_TOKEN` otomatik eklenir.
@@ -78,7 +80,9 @@ Gereksinimler: Docker Engine ve Docker Compose.
 docker compose up -d --build
 ```
 
-Uygulama varsayılan olarak `http://localhost:3000` adresindedir. `deepbrief` servisi web uygulamasını, `scheduler` servisi 10 dakikalık arka plan taramasını çalıştırır. Veriler `deepbrief-content-studio-data` volume’ünde saklanır.
+Uygulama varsayılan olarak `http://localhost:3000` adresindedir. `deepbrief` servisi web uygulamasını, `scheduler` servisi 10 dakikalık arka plan taramasını, `publisher` servisi de 5 dakikalık Instagram yayın turunu çalıştırır (Vercel’deki harici cron’un karşılığı; süresi `PUBLISH_INTERVAL_SECONDS` ile değişir). Veriler `deepbrief-content-studio-data` volume’ünde saklanır.
+
+Instagram yayını Docker’da da aynı kurulumu ister: `DATABASE_URL` (Postgres kuyruğu), `BLOB_READ_WRITE_TOKEN` (herkese açık medya deposu) ve dört hesabın `IG_*` değişkenleri `.env` dosyasına girilir. Kuyruk SQLite volume’ünde tutulmaz, çünkü Instagram medyayı herkese açık bir HTTPS adresinden çeker. Bu değişkenler boşken `publisher` servisi çalışmaya devam eder ama bir şey yayınlamaz.
 
 `.env.example` dosyasını `.env` olarak kopyalayıp Groq/OpenAI anahtarlarını ve üretim sırlarını girin. Değişiklikten sonra:
 

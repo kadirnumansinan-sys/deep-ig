@@ -26,6 +26,14 @@ export type EncodeReelResult = {
   hasAudio: boolean;
 };
 
+/** 1080 × 1920 çıktı koordinatlarında, yalnızca bu alan yakınlaştırılır. */
+export type ReelZoomRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
 export function videoExportSupported(): boolean {
   return (
     typeof VideoEncoder !== 'undefined' &&
@@ -59,9 +67,15 @@ async function drainQueue(encoder: { encodeQueueSize: number }): Promise<void> {
 /**
  * Tek bir kareden 7 saniyelik, hafif zoom'lu 1080 × 1920 MP4 üretir.
  * Ses verilmezse veya tarayıcı AAC kodlayamazsa video sessiz çıkar (`hasAudio: false`).
+ *
+ * `zoomRect` verilirse yakınlaştırma yalnızca o alana uygulanır: `image` sabit zemin olarak
+ * çizilir, alan içindeki kırpma kare kare daralır (haber görseli büyür) ve `overlay` —
+ * çubuk, rozet ve yazılar — en üste sabit çizilir.
  */
 export async function encodeReel(options: {
   image: ImageBitmap;
+  overlay?: ImageBitmap | null;
+  zoomRect?: ReelZoomRect | null;
   audio?: ReelAudio | null;
   onProgress?: (ratio: number) => void;
   signal?: AbortSignal;
@@ -70,7 +84,7 @@ export async function encodeReel(options: {
     throw new Error('Tarayıcı video dışa aktarmayı desteklemiyor. Chrome veya Edge kullan.');
   }
 
-  const { image, audio, onProgress, signal } = options;
+  const { image, overlay = null, zoomRect = null, audio, onProgress, signal } = options;
   const useAudio = Boolean(audio && audio.channelData.length > 0 && audioEncodeSupported());
   let encoderError: Error | null = null;
   const fail = (error: DOMException | Error) => {
@@ -122,19 +136,51 @@ export async function encodeReel(options: {
 
       const progress = totalFrames > 1 ? frame / (totalFrames - 1) : 0;
       const scale = 1 + (REEL_ZOOM - 1) * progress;
-      const cropWidth = image.width / scale;
-      const cropHeight = image.height / scale;
-      context.drawImage(
-        image,
-        (image.width - cropWidth) / 2,
-        (image.height - cropHeight) / 2,
-        cropWidth,
-        cropHeight,
-        0,
-        0,
-        REEL_WIDTH,
-        REEL_HEIGHT,
-      );
+
+      if (zoomRect) {
+        // Zemin (arka plan dokusu + yakınlaştırmasız görsel) her karede aynı yerde durur.
+        context.drawImage(image, 0, 0, REEL_WIDTH, REEL_HEIGHT);
+
+        // Kaynak kare 1080'in `REEL_SOURCE_SCALE` katında üretiliyor; alan koordinatlarını çevir.
+        const sourceScale = image.width / REEL_WIDTH;
+        const sourceX = zoomRect.x * sourceScale;
+        const sourceY = zoomRect.y * sourceScale;
+        const sourceWidth = zoomRect.width * sourceScale;
+        const sourceHeight = zoomRect.height * sourceScale;
+        const cropWidth = sourceWidth / scale;
+        const cropHeight = sourceHeight / scale;
+        context.drawImage(
+          image,
+          sourceX + (sourceWidth - cropWidth) / 2,
+          sourceY + (sourceHeight - cropHeight) / 2,
+          cropWidth,
+          cropHeight,
+          zoomRect.x,
+          zoomRect.y,
+          zoomRect.width,
+          zoomRect.height,
+        );
+
+        // Çubuk, rozetler ve yazılar sabit katman: yakınlaştırmadan sonra üste çizilir.
+        if (overlay) {
+          context.drawImage(overlay, zoomRect.x, zoomRect.y, zoomRect.width, zoomRect.height);
+        }
+      } else {
+        const cropWidth = image.width / scale;
+        const cropHeight = image.height / scale;
+        context.drawImage(
+          image,
+          (image.width - cropWidth) / 2,
+          (image.height - cropHeight) / 2,
+          cropWidth,
+          cropHeight,
+          0,
+          0,
+          REEL_WIDTH,
+          REEL_HEIGHT,
+        );
+        if (overlay) context.drawImage(overlay, 0, 0, REEL_WIDTH, REEL_HEIGHT);
+      }
 
       const videoFrame = new VideoFrame(canvas, {
         timestamp: Math.round(frame * frameDurationUs),

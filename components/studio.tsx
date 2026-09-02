@@ -2,7 +2,7 @@
 
 import { upload } from '@vercel/blob/client';
 import JSZip from 'jszip';
-import { toJpeg } from 'html-to-image';
+import { toJpeg, toPng } from 'html-to-image';
 import {
   Check,
   Download,
@@ -44,6 +44,7 @@ import {
   REEL_DURATION_SEC,
   REEL_SOURCE_SCALE,
   REEL_WIDTH,
+  type ReelZoomRect,
 } from '@/lib/video/encode-reel';
 import { CandidateCard } from '@/components/studio/candidate-card';
 import { channels, defaultCrop, initialDrafts } from '@/components/studio/defaults';
@@ -936,14 +937,19 @@ export function Studio() {
     await document.fonts.ready;
     await Promise.all([waitForImages(coverRef.current), waitForImages(detailRef.current)]);
 
-    async function render(node: HTMLDivElement, targetWidth = REEL_WIDTH) {
-      const ratio = targetWidth / node.offsetWidth;
-      return toJpeg(node, {
-        quality: 0.96,
-        pixelRatio: ratio,
-        cacheBust: true,
-        backgroundColor: '#080808',
-      });
+    type RenderOptions = {
+      targetWidth?: number;
+      filter?: (node: HTMLElement) => boolean;
+      /** Saydam PNG üretir; üst katman zemini kapatmasın diye kullanılır. */
+      transparent?: boolean;
+    };
+
+    async function render(node: HTMLElement, options: RenderOptions = {}) {
+      const { targetWidth = REEL_WIDTH, filter, transparent = false } = options;
+      const shared = { pixelRatio: targetWidth / node.offsetWidth, cacheBust: true, filter };
+      return transparent
+        ? toPng(node, shared)
+        : toJpeg(node, { ...shared, quality: 0.96, backgroundColor: '#080808' });
     }
 
     const [cover, detail] = await Promise.all([
@@ -961,9 +967,44 @@ export function Studio() {
       setNotice('7 saniyelik video hazırlanıyor…');
       const selection = musicSelection[channel];
       const track = selection ? trackById(selection.id) : null;
+      // Yakınlaştırma yalnızca haber görselinde olsun diye kare iki katmana ayrılır:
+      // zemin (arka plan + fotoğraf) ve sabit kalacak üst katman (çubuk, rozetler, yazılar).
+      // Üst katmanın tamamı `.detail-card`ın doğrudan çocuğu; tek istisna `.canvas-photo`.
+      const isChrome = (node: HTMLElement) =>
+        typeof node.classList?.contains === 'function' &&
+        node.parentElement?.classList.contains('detail-card') === true &&
+        !node.classList.contains('canvas-photo');
+
       // Zoom'un hiçbir anında büyütme olmaması için kaynak kareyi 1080'in üstünde üret.
-      const frameSource = await render(detailRef.current, Math.round(REEL_WIDTH * REEL_SOURCE_SCALE));
+      const frameSource = await render(detailRef.current, {
+        targetWidth: Math.round(REEL_WIDTH * REEL_SOURCE_SCALE),
+        filter: (node) => !isChrome(node),
+      });
       const bitmap = await createImageBitmap(await (await fetch(frameSource)).blob());
+
+      // Kartın 1080 × 1920 çıktı içindeki yeri: yakınlaştırma yalnızca bu dikdörtgene uygulanır.
+      const cardNode = detailRef.current.querySelector<HTMLElement>('.detail-card');
+      let overlayBitmap: ImageBitmap | null = null;
+      let zoomRect: ReelZoomRect | null = null;
+      if (cardNode) {
+        const canvasBox = detailRef.current.getBoundingClientRect();
+        const cardBox = cardNode.getBoundingClientRect();
+        const ratio = REEL_WIDTH / canvasBox.width;
+        zoomRect = {
+          x: Math.round((cardBox.left - canvasBox.left) * ratio),
+          y: Math.round((cardBox.top - canvasBox.top) * ratio),
+          width: Math.round(cardBox.width * ratio),
+          height: Math.round(cardBox.height * ratio),
+        };
+        // `.detail-card`ın kendi arka planı yok; saydam PNG olarak alınıp zeminin üstüne konur.
+        const overlaySource = await render(cardNode, {
+          targetWidth: zoomRect.width,
+          filter: (node) => !node.classList?.contains('canvas-photo'),
+          transparent: true,
+        });
+        overlayBitmap = await createImageBitmap(await (await fetch(overlaySource)).blob());
+      }
+
       let audio = null;
       let trackNote = 'müziksiz';
       if (track && selection) {
@@ -982,6 +1023,8 @@ export function Studio() {
       try {
         const { blob, hasAudio } = await encodeReel({
           image: bitmap,
+          overlay: overlayBitmap,
+          zoomRect,
           audio,
           onProgress: setExportProgress,
         });
@@ -990,6 +1033,7 @@ export function Studio() {
         videoNote = hasAudio ? `video: ${trackNote}` : 'video: sessiz';
       } finally {
         bitmap.close();
+        overlayBitmap?.close();
       }
     }
 
@@ -1029,8 +1073,9 @@ export function Studio() {
   }
 
   // Instagram medyayı herkese açık bir HTTPS adresinden çektiği için önce Blob'a yüklenir,
-  // sonra kayıt kuyruğa yazılır. Yayını cron (/api/internal/publish) yapar.
-  async function schedulePost(scheduledAt: Date) {
+  // sonra kayıt kuyruğa yazılır. Planlı yayını cron (/api/internal/publish), anlık yayını
+  // isteğin kendisi (`publishNow`) yürütür; kapak videonun thumbnail'i, ses videonun içindedir.
+  async function submitPost(target: { scheduledAt: Date; publishNow: boolean }) {
     if (!videoExportSupported()) {
       throw new Error('Bu tarayıcı video dışa aktarmayı desteklemiyor; Chrome veya Edge gerekli.');
     }
@@ -1039,7 +1084,7 @@ export function Studio() {
     setNotice('Yayın için medya hazırlanıyor…');
     try {
       const media = await buildMedia();
-      if (!media.video) throw new Error('Video üretilemedi, planlama iptal edildi.');
+      if (!media.video) throw new Error('Video üretilemedi, yayın iptal edildi.');
 
       setNotice('Medya Blob deposuna yükleniyor…');
       const uploadOptions = { access: 'public', handleUploadUrl: '/api/blob/upload' } as const;
@@ -1054,6 +1099,7 @@ export function Studio() {
         }),
       ]);
 
+      if (target.publishNow) setNotice('Instagram’a gönderiliyor…');
       const response = await fetch('/api/schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1062,22 +1108,47 @@ export function Studio() {
           caption: draft.caption.trim(),
           videoUrl: videoBlob.url,
           coverUrl: coverBlob.url,
-          scheduledAt: scheduledAt.toISOString(),
+          scheduledAt: target.scheduledAt.toISOString(),
+          publishNow: target.publishNow,
         }),
       });
-      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-      if (!response.ok) throw new Error(payload?.error || 'Yayın planlanamadı.');
-      setNotice(
-        `Yayın planlandı: ${new Intl.DateTimeFormat('tr-TR', {
-          timeZone: 'Europe/Istanbul',
-          dateStyle: 'short',
-          timeStyle: 'short',
-        }).format(scheduledAt)} · ${media.videoNote}.`,
-      );
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string;
+        publish?: { status: 'published' | 'processing' | 'failed'; permalink: string | null; error: string | null };
+      } | null;
+      if (!response.ok) throw new Error(payload?.error || 'Yayın gönderilemedi.');
+
+      if (!target.publishNow) {
+        setNotice(
+          `Yayın planlandı: ${new Intl.DateTimeFormat('tr-TR', {
+            timeZone: 'Europe/Istanbul',
+            dateStyle: 'short',
+            timeStyle: 'short',
+          }).format(target.scheduledAt)} · ${media.videoNote}.`,
+        );
+        return;
+      }
+
+      const publish = payload?.publish;
+      // Instagram konteyneri istek süresinde bitmeyebilir; o durumda yayını cron tamamlar.
+      if (publish?.status === 'failed') throw new Error(publish.error || 'Instagram yayını başarısız oldu.');
+      if (publish?.status === 'published') {
+        setNotice(`Instagram’da yayınlandı · ${media.videoNote}.`);
+        return;
+      }
+      setNotice('Instagram’a gönderildi, video işleniyor. Kuyruk durumunu panelden izleyebilirsiniz.');
     } finally {
       setExporting(false);
       setExportProgress(0);
     }
+  }
+
+  async function schedulePost(scheduledAt: Date) {
+    await submitPost({ scheduledAt, publishNow: false });
+  }
+
+  async function publishPostNow() {
+    await submitPost({ scheduledAt: new Date(), publishNow: true });
   }
 
   return (
@@ -1582,6 +1653,7 @@ export function Studio() {
           <SchedulePanel
             busy={exporting}
             channel={channel}
+            onPublishNow={publishPostNow}
             onSchedule={schedulePost}
             progress={exportProgress}
           />

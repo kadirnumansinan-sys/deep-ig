@@ -193,6 +193,20 @@ export async function cancelPost(id: string): Promise<ScheduledPost | null> {
   return rows.length ? mapPost(rows[0]) : null;
 }
 
+// Anlık paylaşımda satır cron ile yarışmasın diye tek atomik UPDATE ile alınır. Boş dönerse
+// satırı bu sırada cron kapmıştır; yayını o tamamlar.
+export async function claimScheduledPost(id: string): Promise<ScheduledPost | null> {
+  await ensureSchema();
+  const sql = db();
+  const rows = (await sql`
+    UPDATE scheduled_posts
+    SET status = 'creating', attempts = attempts + 1, updated_at = now()
+    WHERE id = ${id} AND status = 'scheduled'
+    RETURNING *
+  `) as Row[];
+  return rows.length ? mapPost(rows[0]) : null;
+}
+
 // Aynı satırı iki eşzamanlı cron tetiklemesinin almaması için claim tek atomik UPDATE.
 export async function claimDuePosts(now: Date, limit = 4): Promise<ScheduledPost[]> {
   await ensureSchema();

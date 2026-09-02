@@ -1049,6 +1049,15 @@ button { color: inherit; }
   font-weight: 750;
   padding: 9px 11px;
 }
+.schedule-row button.schedule-now {
+  align-items: center;
+  background: #f4f4f1;
+  border: 1px solid #e0e0dc;
+  color: var(--ink);
+  display: inline-flex;
+  gap: 5px;
+}
+
 .schedule-row button:disabled { cursor: not-allowed; opacity: 0.5; }
 .schedule-warning { color: #b3341f; font-size: 7px; line-height: 1.5; margin: 0; }
 .schedule-queue { display: flex; flex-direction: column; gap: 5px; list-style: none; margin: 0; padding: 0; }
