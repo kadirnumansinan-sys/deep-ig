@@ -32,6 +32,38 @@
     "gain": 0.55
   },
   {
+    "id": "corruption",
+    "title": "Corruption",
+    "artist": "Kevin MacLeod",
+    "file": "corruption.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Corruption",
+    "attributionRequired": true,
+    "moods": [
+      "tense",
+      "somber"
+    ],
+    "lengthSec": 37,
+    "startSec": 6,
+    "gain": 0.55
+  },
+  {
+    "id": "crossing-the-chasm",
+    "title": "Crossing the Chasm",
+    "artist": "Kevin MacLeod",
+    "file": "crossing-the-chasm.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Crossing+the+Chasm",
+    "attributionRequired": true,
+    "moods": [
+      "cinematic",
+      "uplifting"
+    ],
+    "lengthSec": 37,
+    "startSec": 6,
+    "gain": 0.5
+  },
+  {
     "id": "crypto",
     "title": "Crypto",
     "artist": "Kevin MacLeod",
@@ -46,6 +78,70 @@
     "lengthSec": 37,
     "startSec": 6,
     "gain": 0.5
+  },
+  {
+    "id": "danger-storm",
+    "title": "Danger Storm",
+    "artist": "Kevin MacLeod",
+    "file": "danger-storm.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Danger+Storm",
+    "attributionRequired": true,
+    "moods": [
+      "tense",
+      "cinematic"
+    ],
+    "lengthSec": 37,
+    "startSec": 6,
+    "gain": 0.55
+  },
+  {
+    "id": "deliberate-thought",
+    "title": "Deliberate Thought",
+    "artist": "Kevin MacLeod",
+    "file": "deliberate-thought.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Deliberate+Thought",
+    "attributionRequired": true,
+    "moods": [
+      "documentary",
+      "neutral"
+    ],
+    "lengthSec": 26,
+    "startSec": 3,
+    "gain": 0.55
+  },
+  {
+    "id": "disquiet",
+    "title": "Disquiet",
+    "artist": "Kevin MacLeod",
+    "file": "disquiet.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Disquiet",
+    "attributionRequired": true,
+    "moods": [
+      "somber",
+      "tense"
+    ],
+    "lengthSec": 37,
+    "startSec": 6,
+    "gain": 0.55
+  },
+  {
+    "id": "echoes-of-time",
+    "title": "Echoes of Time",
+    "artist": "Kevin MacLeod",
+    "file": "echoes-of-time.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Echoes+of+Time",
+    "attributionRequired": true,
+    "moods": [
+      "cinematic",
+      "somber"
+    ],
+    "lengthSec": 29,
+    "startSec": 4,
+    "gain": 0.55
   },
   {
     "id": "evening-melodrama",
@@ -80,6 +176,22 @@
     "gain": 0.55
   },
   {
+    "id": "failing-defense",
+    "title": "Failing Defense",
+    "artist": "Kevin MacLeod",
+    "file": "failing-defense.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Failing+Defense",
+    "attributionRequired": true,
+    "moods": [
+      "tense",
+      "documentary"
+    ],
+    "lengthSec": 29,
+    "startSec": 4,
+    "gain": 0.55
+  },
+  {
     "id": "hard-boiled",
     "title": "Hard Boiled",
     "artist": "Kevin MacLeod",
@@ -93,6 +205,102 @@
     ],
     "lengthSec": 37,
     "startSec": 6,
+    "gain": 0.55
+  },
+  {
+    "id": "heavy-interlude",
+    "title": "Heavy Interlude",
+    "artist": "Kevin MacLeod",
+    "file": "heavy-interlude.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Heavy+Interlude",
+    "attributionRequired": true,
+    "moods": [
+      "tense",
+      "documentary"
+    ],
+    "lengthSec": 27,
+    "startSec": 3,
+    "gain": 0.55
+  },
+  {
+    "id": "hitman",
+    "title": "Hitman",
+    "artist": "Kevin MacLeod",
+    "file": "hitman.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Hitman",
+    "attributionRequired": true,
+    "moods": [
+      "electronic",
+      "tense"
+    ],
+    "lengthSec": 29,
+    "startSec": 4,
+    "gain": 0.5
+  },
+  {
+    "id": "impact-andante",
+    "title": "Impact Andante",
+    "artist": "Kevin MacLeod",
+    "file": "impact-andante.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Impact+Andante",
+    "attributionRequired": true,
+    "moods": [
+      "cinematic",
+      "neutral"
+    ],
+    "lengthSec": 29,
+    "startSec": 4,
+    "gain": 0.55
+  },
+  {
+    "id": "impact-lento",
+    "title": "Impact Lento",
+    "artist": "Kevin MacLeod",
+    "file": "impact-lento.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Impact+Lento",
+    "attributionRequired": true,
+    "moods": [
+      "somber",
+      "cinematic"
+    ],
+    "lengthSec": 29,
+    "startSec": 4,
+    "gain": 0.55
+  },
+  {
+    "id": "impact-moderato",
+    "title": "Impact Moderato",
+    "artist": "Kevin MacLeod",
+    "file": "impact-moderato.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Impact+Moderato",
+    "attributionRequired": true,
+    "moods": [
+      "documentary",
+      "cinematic"
+    ],
+    "lengthSec": 29,
+    "startSec": 4,
+    "gain": 0.55
+  },
+  {
+    "id": "impact-prelude",
+    "title": "Impact Prelude",
+    "artist": "Kevin MacLeod",
+    "file": "impact-prelude.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Impact+Prelude",
+    "attributionRequired": true,
+    "moods": [
+      "cinematic",
+      "tense"
+    ],
+    "lengthSec": 29,
+    "startSec": 4,
     "gain": 0.55
   },
   {
@@ -144,6 +352,54 @@
     "gain": 0.55
   },
   {
+    "id": "investigations",
+    "title": "Investigations",
+    "artist": "Kevin MacLeod",
+    "file": "investigations.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Investigations",
+    "attributionRequired": true,
+    "moods": [
+      "documentary",
+      "tense"
+    ],
+    "lengthSec": 29,
+    "startSec": 4,
+    "gain": 0.55
+  },
+  {
+    "id": "killers",
+    "title": "Killers",
+    "artist": "Kevin MacLeod",
+    "file": "killers.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Killers",
+    "attributionRequired": true,
+    "moods": [
+      "tense",
+      "cinematic"
+    ],
+    "lengthSec": 37,
+    "startSec": 6,
+    "gain": 0.55
+  },
+  {
+    "id": "lightless-dawn",
+    "title": "Lightless Dawn",
+    "artist": "Kevin MacLeod",
+    "file": "lightless-dawn.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Lightless+Dawn",
+    "attributionRequired": true,
+    "moods": [
+      "somber",
+      "cinematic"
+    ],
+    "lengthSec": 29,
+    "startSec": 4,
+    "gain": 0.55
+  },
+  {
     "id": "long-note-one",
     "title": "Long Note One",
     "artist": "Kevin MacLeod",
@@ -176,6 +432,22 @@
     "gain": 0.55
   },
   {
+    "id": "marty-gots-a-plan",
+    "title": "Marty Gots a Plan",
+    "artist": "Kevin MacLeod",
+    "file": "marty-gots-a-plan.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Marty+Gots+a+Plan",
+    "attributionRequired": true,
+    "moods": [
+      "neutral",
+      "documentary"
+    ],
+    "lengthSec": 37,
+    "startSec": 6,
+    "gain": 0.55
+  },
+  {
     "id": "mechanolith",
     "title": "Mechanolith",
     "artist": "Kevin MacLeod",
@@ -190,6 +462,54 @@
     "lengthSec": 29,
     "startSec": 4,
     "gain": 0.5
+  },
+  {
+    "id": "metaphysik",
+    "title": "Metaphysik",
+    "artist": "Kevin MacLeod",
+    "file": "metaphysik.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Metaphysik",
+    "attributionRequired": true,
+    "moods": [
+      "electronic",
+      "neutral"
+    ],
+    "lengthSec": 37,
+    "startSec": 6,
+    "gain": 0.5
+  },
+  {
+    "id": "mirage",
+    "title": "Mirage",
+    "artist": "Kevin MacLeod",
+    "file": "mirage.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Mirage",
+    "attributionRequired": true,
+    "moods": [
+      "electronic",
+      "documentary"
+    ],
+    "lengthSec": 29,
+    "startSec": 4,
+    "gain": 0.5
+  },
+  {
+    "id": "movement-proposition",
+    "title": "Movement Proposition",
+    "artist": "Kevin MacLeod",
+    "file": "movement-proposition.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Movement+Proposition",
+    "attributionRequired": true,
+    "moods": [
+      "neutral",
+      "documentary"
+    ],
+    "lengthSec": 29,
+    "startSec": 4,
+    "gain": 0.55
   },
   {
     "id": "news-theme",
@@ -208,6 +528,54 @@
     "gain": 0.55
   },
   {
+    "id": "nowhere-land",
+    "title": "Nowhere Land",
+    "artist": "Kevin MacLeod",
+    "file": "nowhere-land.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Nowhere+Land",
+    "attributionRequired": true,
+    "moods": [
+      "somber",
+      "neutral"
+    ],
+    "lengthSec": 37,
+    "startSec": 6,
+    "gain": 0.55
+  },
+  {
+    "id": "oppressive-gloom",
+    "title": "Oppressive Gloom",
+    "artist": "Kevin MacLeod",
+    "file": "oppressive-gloom.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Oppressive+Gloom",
+    "attributionRequired": true,
+    "moods": [
+      "somber",
+      "tense"
+    ],
+    "lengthSec": 29,
+    "startSec": 4,
+    "gain": 0.55
+  },
+  {
+    "id": "perspectives",
+    "title": "Perspectives",
+    "artist": "Kevin MacLeod",
+    "file": "perspectives.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Perspectives",
+    "attributionRequired": true,
+    "moods": [
+      "documentary",
+      "neutral"
+    ],
+    "lengthSec": 29,
+    "startSec": 4,
+    "gain": 0.55
+  },
+  {
     "id": "prelude-and-action",
     "title": "Prelude and Action",
     "artist": "Kevin MacLeod",
@@ -221,6 +589,22 @@
     ],
     "lengthSec": 29,
     "startSec": 4,
+    "gain": 0.55
+  },
+  {
+    "id": "private-reflection",
+    "title": "Private Reflection",
+    "artist": "Kevin MacLeod",
+    "file": "private-reflection.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Private+Reflection",
+    "attributionRequired": true,
+    "moods": [
+      "somber",
+      "neutral"
+    ],
+    "lengthSec": 27,
+    "startSec": 3,
     "gain": 0.55
   },
   {
@@ -288,6 +672,86 @@
     "gain": 0.55
   },
   {
+    "id": "satiate",
+    "title": "Satiate",
+    "artist": "Kevin MacLeod",
+    "file": "satiate.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Satiate",
+    "attributionRequired": true,
+    "moods": [
+      "electronic",
+      "tense"
+    ],
+    "lengthSec": 29,
+    "startSec": 4,
+    "gain": 0.5
+  },
+  {
+    "id": "steel-and-seething",
+    "title": "Steel and Seething",
+    "artist": "Kevin MacLeod",
+    "file": "steel-and-seething.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Steel+and+Seething",
+    "attributionRequired": true,
+    "moods": [
+      "tense",
+      "electronic"
+    ],
+    "lengthSec": 29,
+    "startSec": 4,
+    "gain": 0.55
+  },
+  {
+    "id": "take-a-chance",
+    "title": "Take a Chance",
+    "artist": "Kevin MacLeod",
+    "file": "take-a-chance.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Take+a+Chance",
+    "attributionRequired": true,
+    "moods": [
+      "uplifting",
+      "neutral"
+    ],
+    "lengthSec": 29,
+    "startSec": 4,
+    "gain": 0.5
+  },
+  {
+    "id": "tempting-secrets",
+    "title": "Tempting Secrets",
+    "artist": "Kevin MacLeod",
+    "file": "tempting-secrets.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Tempting+Secrets",
+    "attributionRequired": true,
+    "moods": [
+      "documentary",
+      "tense"
+    ],
+    "lengthSec": 29,
+    "startSec": 4,
+    "gain": 0.55
+  },
+  {
+    "id": "the-complex",
+    "title": "The Complex",
+    "artist": "Kevin MacLeod",
+    "file": "the-complex.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=The+Complex",
+    "attributionRequired": true,
+    "moods": [
+      "electronic",
+      "tense"
+    ],
+    "lengthSec": 29,
+    "startSec": 4,
+    "gain": 0.5
+  },
+  {
     "id": "the-descent",
     "title": "The Descent",
     "artist": "Kevin MacLeod",
@@ -301,6 +765,22 @@
     ],
     "lengthSec": 29,
     "startSec": 4,
+    "gain": 0.55
+  },
+  {
+    "id": "thinking-music",
+    "title": "Thinking Music",
+    "artist": "Kevin MacLeod",
+    "file": "thinking-music.mp3",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://incompetech.com/music/royalty-free/index.html?keywords=Thinking+Music",
+    "attributionRequired": true,
+    "moods": [
+      "documentary",
+      "neutral"
+    ],
+    "lengthSec": 37,
+    "startSec": 6,
     "gain": 0.55
   },
   {

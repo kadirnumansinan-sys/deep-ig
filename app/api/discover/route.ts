@@ -14,6 +14,7 @@ import { isLanguageMatch, type PublicationLanguage } from '@/lib/language';
 import {
   deduplicateCandidates,
   enrichIntelligence,
+  freshnessFor,
   istanbulDate,
   istanbulNowDate,
   isRecentHours,
@@ -365,6 +366,64 @@ async function getGoogleNews(channel: Exclude<Channel, 'history'>): Promise<Cont
 type PublisherFeed = { url: string; sourceName: string; language: PublicationLanguage; breaking?: boolean };
 type PublisherGroup = { id: string; label: string; feeds: PublisherFeed[] };
 
+type ChannelTuning = {
+  feedItems: number;
+  trendsLabel: string;
+  trendsTtlMs: number;
+  gdeltTtlMs: number;
+  newsApiTtlMs: number;
+  responseTtlMs: number;
+  maxCandidates: number;
+};
+
+// Her haber sayfasının ritmi farklı: son dakika akışı dakikalar içinde değişiyor,
+// yaşam/kültür akışı saatlerde, tarihte bugün ise günde bir kez. Tarama sıklığı,
+// kaynak başına öğe sayısı ve liste boyu sayfaya göre ayrı ayarlanıyor.
+function channelTuning(channel: Channel): ChannelTuning {
+  if (channel === 'history') {
+    return {
+      feedItems: PUBLISHER_FEED_ITEMS_PER_SOURCE,
+      trendsLabel: 'Google Trends · Türkiye',
+      trendsTtlMs: 6 * 60 * 60_000,
+      gdeltTtlMs: 6 * 60 * 60_000,
+      newsApiTtlMs: 6 * 60 * 60_000,
+      responseTtlMs: 60 * 60_000,
+      maxCandidates: 60,
+    };
+  }
+  if (channel === 'international') {
+    return {
+      feedItems: PUBLISHER_FEED_ITEMS_PER_SOURCE,
+      trendsLabel: 'Google Trends · Global',
+      trendsTtlMs: 30 * 60_000,
+      gdeltTtlMs: 15 * 60_000,
+      newsApiTtlMs: 60 * 60_000,
+      responseTtlMs: 5 * 60_000,
+      maxCandidates: 100,
+    };
+  }
+  if (channel === 'media') {
+    return {
+      feedItems: Math.max(40, Math.round(PUBLISHER_FEED_ITEMS_PER_SOURCE * 0.75)),
+      trendsLabel: 'Google Trends · Türkiye',
+      trendsTtlMs: 60 * 60_000,
+      gdeltTtlMs: 30 * 60_000,
+      newsApiTtlMs: 120 * 60_000,
+      responseTtlMs: 10 * 60_000,
+      maxCandidates: 80,
+    };
+  }
+  return {
+    feedItems: PUBLISHER_FEED_ITEMS_PER_SOURCE,
+    trendsLabel: 'Google Trends · Türkiye',
+    trendsTtlMs: 20 * 60_000,
+    gdeltTtlMs: 10 * 60_000,
+    newsApiTtlMs: 60 * 60_000,
+    responseTtlMs: 3 * 60_000,
+    maxCandidates: 100,
+  };
+}
+
 function publisherGroups(channel: Exclude<Channel, 'history'>): PublisherGroup[] {
   if (channel === 'international') {
     return [
@@ -513,6 +572,19 @@ function publisherGroups(channel: Exclude<Channel, 'history'>): PublisherGroup[]
       },
     ]
     : [];
+  // Yaşam/kültür sayfasının kendi akışı yoktu; TRT ve AA'nın genel beslemesine
+  // ek olarak NTV'nin yaşam, teknoloji ve sağlık RSS'leri (hepsi 200 doğrulandı).
+  const mediaOnlyExtras: PublisherGroup[] = channel === 'media'
+    ? [{
+      id: 'ntv-yasam-rss',
+      label: 'NTV · yaşam ve teknoloji RSS',
+      feeds: ['yasam', 'teknoloji', 'saglik'].map((name) => ({
+        url: `https://www.ntv.com.tr/${name}.rss`,
+        sourceName: 'NTV',
+        language: 'tr' as const,
+      })),
+    }]
+    : [];
   return [
     {
       id: 'trt-rss',
@@ -543,15 +615,16 @@ function publisherGroups(channel: Exclude<Channel, 'history'>): PublisherGroup[]
       })),
     },
     ...newsOnlyExtras,
+    ...mediaOnlyExtras,
     ...turkishExtras,
   ];
 }
 
-async function parsePublisherFeed(feed: PublisherFeed): Promise<ContentCandidate[]> {
+async function parsePublisherFeed(feed: PublisherFeed, itemLimit: number): Promise<ContentCandidate[]> {
   const data = await fetchXml(feed.url);
   return feedItems(data)
     .filter((item) => isTodayish(text(item.pubDate)))
-    .slice(0, PUBLISHER_FEED_ITEMS_PER_SOURCE)
+    .slice(0, itemLimit)
     .flatMap((item, index) => {
       const sourceUrl = text(item.link) || text(item.guid);
       const title = stripSourceAttribution(text(item.title), feed.sourceName);
@@ -580,8 +653,8 @@ async function parsePublisherFeed(feed: PublisherFeed): Promise<ContentCandidate
     });
 }
 
-async function getPublisherRss(feeds: PublisherFeed[]): Promise<ContentCandidate[]> {
-  const results = await Promise.allSettled(feeds.map(parsePublisherFeed));
+async function getPublisherRss(feeds: PublisherFeed[], itemLimit: number): Promise<ContentCandidate[]> {
+  const results = await Promise.allSettled(feeds.map((feed) => parsePublisherFeed(feed, itemLimit)));
   if (!results.some((result) => result.status === 'fulfilled')) throw new Error('Tüm doğrudan RSS akışları başarısız');
   return results.flatMap((result) => result.status === 'fulfilled' ? result.value : []);
 }
@@ -804,31 +877,35 @@ async function discover(channel: Channel): Promise<DiscoveryResponse> {
   }
 
   const language: PublicationLanguage = channel === 'international' ? 'en' : 'tr';
+  const tuning = channelTuning(channel);
   const directPublisherSources = publisherGroups(channel).map((group) => (
-    runSource(group.id, group.label, () => getPublisherRss(group.feeds))
+    runSource(group.id, group.label, () => getPublisherRss(group.feeds, tuning.feedItems))
   ));
   const results = await Promise.all([
     ...directPublisherSources,
     runSource('google-news', channel === 'international' ? 'Google News · Global' : 'Google News · Türkiye', () => getGoogleNews(channel)),
-    runSource('google-trends', 'Google Trends · Türkiye', () => (
-      cachedSource(`trends:${language}`, 30 * 60_000, () => getTrends(language))
+    runSource('google-trends', tuning.trendsLabel, () => (
+      cachedSource(`trends:${language}`, tuning.trendsTtlMs, () => getTrends(language))
     )),
     runSource('gdelt', 'GDELT küresel haber ağı', () => (
-      cachedSource(`gdelt:${channel}`, 15 * 60_000, () => getGdelt(channel))
+      cachedSource(`gdelt:${channel}`, tuning.gdeltTtlMs, () => getGdelt(channel))
     )),
     runSource('newsapi', channel === 'international' ? 'NewsAPI · Global' : 'NewsAPI · Türkiye', () => (
-      cachedSource(`newsapi:${channel}`, 90 * 60_000, () => getNewsApi(channel))
+      cachedSource(`newsapi:${channel}`, tuning.newsApiTtlMs, () => getNewsApi(channel))
     )),
   ]);
   const combined = results.flatMap((result) => result.candidates);
   const candidates = signedCandidates(
     deduplicateCandidates(enrichIntelligence(combined, channel))
+      // Eskimiş kayıt artık sıralamada aşağı itilmiyor, listeden tamamen çıkıyor;
+      // yalnızca bugüne ait (ya da tarihi henüz doğrulanmamış canlı) akış kalıyor.
+      .filter((candidate) => candidate.freshnessStatus !== 'stale')
       .sort((left, right) => {
         const breakingDelta = Number(right.breaking === true) - Number(left.breaking === true);
         const freshnessDelta = Number(right.freshnessStatus === 'today') - Number(left.freshnessStatus === 'today');
         return breakingDelta * 40 || freshnessDelta * 20 || right.score - left.score;
       })
-      .slice(0, 100),
+      .slice(0, tuning.maxCandidates),
   );
   const groq = groqStatus();
   const sourceStatus: DiscoveryResponse['sourceStatus'] = results.map((result) => ({
@@ -871,6 +948,14 @@ async function discover(channel: Channel): Promise<DiscoveryResponse> {
   };
 }
 
+const MEMORY_SIGNAL_SUFFIX = ' · kalıcı hafızadan';
+
+// Arşiv rozeti eskiden adayla birlikte kaydediliyordu; her tarama turunda yeniden
+// eklenince sinyal metni "· kalıcı hafızadan · kalıcı hafızadan …" diye uzuyordu.
+function baseSignal(signal: string): string {
+  return signal.split(MEMORY_SIGNAL_SUFFIX).join('').trim();
+}
+
 function validChannel(value: string | null): Channel {
   return value === 'history' || value === 'international' || value === 'media' ? value : 'news';
 }
@@ -900,21 +985,37 @@ async function applyDurableMemory(
   const activeSourceCount = live.sourceStatus.filter((source) => source.status === 'active').length;
   const shouldUseArchive = activeSourceCount < 3 || live.candidates.length < 20;
   let candidates = live.candidates;
+  let archivedCount = 0;
   if (shouldUseArchive) {
-    const archived = signedCandidates(await loadRecentCandidates(channel, 100));
+    const now = new Date();
+    const archived = signedCandidates(await loadRecentCandidates(channel, 100))
+      .map((candidate) => ({
+        ...candidate,
+        // Kayıtlı rozet birikimini temizle ve tazeliği kaydedilen değere değil
+        // şimdiki zamana göre yeniden hesapla; dünkü "today" bugün stale sayılır.
+        signal: baseSignal(candidate.signal),
+        freshnessStatus: freshnessFor(
+          candidate.canonicalPublishedAt || candidate.publishedAt,
+          candidate.canonicalModifiedAt,
+          now,
+        ),
+      }))
+      .filter((candidate) => (
+        candidate.freshnessStatus === 'today' || candidate.freshnessStatus === 'updated-today'
+      ));
     const merged = [...live.candidates];
     for (const candidate of archived) {
       const exists = merged.some((current) => (
         current.id === candidate.id || current.sourceUrl === candidate.sourceUrl
       ));
-      if (!exists && candidate.freshnessStatus !== 'stale') {
-        merged.push({
-          ...candidate,
-          signal: `${candidate.signal} · kalıcı hafızadan`,
-        });
+      if (!exists) {
+        merged.push(candidate);
+        archivedCount += 1;
       }
     }
-    candidates = merged.sort((left, right) => right.score - left.score).slice(0, 100);
+    candidates = merged
+      .sort((left, right) => right.score - left.score)
+      .slice(0, channelTuning(channel).maxCandidates);
   }
 
   const candidatePayload: DiscoveryResponse = {
@@ -922,9 +1023,24 @@ async function applyDurableMemory(
     candidates,
     coverage: coverageFor(candidates),
   };
+  // Rozetsiz hâl kalıcılaştırılır; arşiv etiketi yalnızca yanıtta gösterilir,
+  // böylece her tarama döngüsünde metnin sonuna tekrar tekrar eklenmez.
   const persisted = await persistDiscoverySnapshot(channel, candidatePayload);
+  const archivedIds = new Set(
+    archivedCount > 0
+      ? candidates.filter((candidate) => !live.candidates.some((item) => item.id === candidate.id))
+        .map((candidate) => candidate.id)
+      : [],
+  );
   return {
     ...candidatePayload,
+    candidates: archivedIds.size > 0
+      ? candidates.map((candidate) => (
+        archivedIds.has(candidate.id)
+          ? { ...candidate, signal: `${candidate.signal}${MEMORY_SIGNAL_SUFFIX}` }
+          : candidate
+      ))
+      : candidates,
     sourceStatus: [...candidatePayload.sourceStatus, {
       id: 'database',
       label: 'Kalıcı haber hafızası',
@@ -972,6 +1088,10 @@ export async function getDiscoveryPayload(
     return cached.payload;
   }
   const payload = await applyDurableMemory(channel, await discover(channel));
-  discoveryCache.set(channel, { payload, expiresAt: Date.now() + 5 * 60_000 });
+  // Yanıt ömrü de sayfaya göre: son dakika 3 dk, yaşam 10 dk, tarihte bugün 1 saat.
+  discoveryCache.set(channel, {
+    payload,
+    expiresAt: Date.now() + channelTuning(channel).responseTtlMs,
+  });
   return payload;
 }
