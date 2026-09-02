@@ -1,10 +1,10 @@
 'use client';
 
+import { upload } from '@vercel/blob/client';
 import JSZip from 'jszip';
 import { toJpeg } from 'html-to-image';
 import {
   Check,
-  Clock3,
   Download,
   ExternalLink,
   ImagePlus,
@@ -19,20 +19,17 @@ import {
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { MiniCropPreview, ReelPreview, type CropSettings, type DraftContent } from '@/components/reel-preview';
+import { MiniCropPreview, ReelPreview, type CropSettings } from '@/components/reel-preview';
 import { filterCandidates, type CandidateFilter } from '@/lib/candidate-filters';
 import type {
   Channel,
   ContentCandidate,
   DiscoveryResponse,
-  FreshnessStatus,
 } from '@/lib/content';
 import {
   completeExcerpt,
-  containsPublisherLanguage,
   hasCompleteSentenceEnding,
   hasIncompleteEnding,
-  hasRepeatedPhrase,
   hasSufficientSourceDetail,
   stripSourceAttribution,
 } from '@/lib/copy-guard';
@@ -48,483 +45,51 @@ import {
   REEL_SOURCE_SCALE,
   REEL_WIDTH,
 } from '@/lib/video/encode-reel';
+import { CandidateCard } from '@/components/studio/candidate-card';
+import { channels, defaultCrop, initialDrafts } from '@/components/studio/defaults';
+import { SchedulePanel } from '@/components/studio/schedule-panel';
+import type {
+  CopyStatus,
+  Draft,
+  EnrichmentResponse,
+  GapScanResponse,
+  GeneratedCopyResponse,
+  GroqAnalysisResponse,
+  GroqStatusResponse,
+  ImageOption,
+  ProviderUsage,
+  UpscaleStatus,
+} from '@/components/studio/types';
+import {
+  blobToDataUrl,
+  coverageFromCandidates,
+  downloadBlob,
+  freshnessLabel,
+  isPublicationQuality,
+  measureImage,
+  prepareUpscaleBlob,
+  proxied,
+  restoreDraft,
+  safeFileName,
+  upscaleBlobLocally,
+  waitForImages,
+  wordCount,
+} from '@/components/studio/utils';
 
-type ImageOption = {
-  src: string;
-  width: number;
-  height: number;
-  origin: string;
-};
-
-type Draft = DraftContent & {
-  caption: string;
-  sourceName: string;
-  sourceUrl: string;
-  sourceToken: string;
-  sourceTitle: string;
-  sourceSummary: string;
-  imageWidth: number;
-  imageHeight: number;
-  imageOptions: ImageOption[];
-  sourceFreshnessStatus: FreshnessStatus;
+// Tek render turunda üretilen medya: ZIP indirmede de planlı yayında da aynı çıktı kullanılır.
+type BuiltMedia = {
+  base: string;
+  cover: string;
+  detail: string;
+  video: Blob | null;
+  videoNote: string;
+  musicNote: string | null;
 };
 
 // next.config.ts bu üçünü derleme sırasında hesaplar; webpack DefinePlugin satır içine gömer.
 const appVersion = process.env.NEXT_PUBLIC_APP_VERSION || '0.0.0';
 const appBuild = process.env.NEXT_PUBLIC_APP_BUILD || 'dev';
 const appCommit = process.env.NEXT_PUBLIC_APP_COMMIT || 'local';
-
-const channels: Array<{ id: Channel; label: string; language: string }> = [
-  { id: 'history', label: 'History', language: 'TR' },
-  { id: 'news', label: 'News', language: 'TR' },
-  { id: 'international', label: 'International', language: 'EN' },
-  { id: 'media', label: 'Media', language: 'TR' },
-];
-
-const defaultCrop: CropSettings = { zoom: 1, x: 50, y: 50 };
-
-function proxied(url: string, signature = ''): string {
-  if (!url || url.startsWith('data:') || url.startsWith('/api/image?')) return url;
-  const token = signature ? `&signature=${encodeURIComponent(signature)}` : '';
-  return `/api/image?url=${encodeURIComponent(url)}${token}`;
-}
-
-const newsDemo = proxied(
-  'https://images.unsplash.com/photo-1561731216-c3a4d99437d5?auto=format&fit=crop&w=1600&q=88',
-);
-const historyDemo = proxied(
-  'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1600&q=88',
-);
-
-const initialDrafts: Record<Channel, Draft> = {
-  history: {
-    title: '113 KİŞİ HAYATINI KAYBETTİ',
-    body: "25 Temmuz 2000’de Air France’a ait Concorde, Paris’ten kalkışından kısa süre sonra Gonesse’ye düştü. Kazada uçaktaki 109 kişi ile yerdeki 4 kişi hayatını kaybetti.",
-    location: 'Gonesse, Paris Yakınları, Fransa',
-    image: historyDemo,
-    coverCrop: { zoom: 1.08, x: 50, y: 48 },
-    detailCrop: { zoom: 1, x: 50, y: 48 },
-    caption: '',
-    sourceName: 'Örnek içerik',
-    sourceUrl: '',
-    sourceToken: '',
-    sourceTitle: '',
-    sourceSummary: '',
-    imageWidth: 1600,
-    imageOptions: [],
-    imageHeight: 1067,
-    sourceFreshnessStatus: 'today',
-  },
-  news: {
-    title: '30 ASLAN VE KAPLAN ÖZGÜRLÜĞE TAŞINIYOR',
-    body: 'Yıllarca kapalı ve kötü koşullardaki kafeslerde yaşayan 30 aslan ve kaplan için büyük bir kurtarma operasyonu başladı. Hayvanlar, Güney Afrika ve ABD’deki koruma alanlarına taşınacak.',
-    location: 'Luján, Arjantin',
-    image: newsDemo,
-    coverCrop: { zoom: 1.12, x: 50, y: 49 },
-    detailCrop: { zoom: 1, x: 50, y: 48 },
-    caption: '',
-    sourceName: 'Örnek içerik',
-    sourceUrl: '',
-    sourceToken: '',
-    sourceTitle: '',
-    sourceSummary: '',
-    imageWidth: 1600,
-    imageOptions: [],
-    imageHeight: 1067,
-    sourceFreshnessStatus: 'today',
-  },
-  international: {
-    title: '30 LIONS AND TIGERS ARE MOVING TO FREEDOM',
-    body: 'A major rescue operation has begun for 30 lions and tigers kept for years in cramped, poor conditions. The animals will be moved to sanctuaries in South Africa and the United States.',
-    location: 'Luján, Argentina',
-    image: newsDemo,
-    coverCrop: { zoom: 1.12, x: 50, y: 49 },
-    detailCrop: { zoom: 1, x: 50, y: 48 },
-    caption: '',
-    sourceName: 'Sample content',
-    sourceUrl: '',
-    sourceToken: '',
-    sourceTitle: '',
-    sourceSummary: '',
-    imageWidth: 1600,
-    imageOptions: [],
-    imageHeight: 1067,
-    sourceFreshnessStatus: 'today',
-  },
-  media: {
-    title: 'MEDYA GÜNDEMİNDE BUGÜN',
-    body: 'Deepbrief Media için günün öne çıkan gelişmesini kaynak metnini kontrol ederek burada düzenleyebilirsin.',
-    location: 'İstanbul, Türkiye',
-    image: newsDemo,
-    coverCrop: { zoom: 1.12, x: 50, y: 49 },
-    detailCrop: { zoom: 1, x: 50, y: 48 },
-    caption: '',
-    sourceName: 'Örnek içerik',
-    sourceUrl: '',
-    sourceToken: '',
-    sourceTitle: '',
-    sourceSummary: '',
-    imageWidth: 1600,
-    imageOptions: [],
-    imageHeight: 1067,
-    sourceFreshnessStatus: 'today',
-  },
-};
-
-function restoreDraft(base: Draft, saved?: Partial<Draft>): Draft {
-  const merged = { ...base, ...saved };
-  const sourceTitle = stripSourceAttribution(
-    saved?.sourceTitle?.trim() || (merged.sourceUrl ? merged.title : ''),
-    merged.sourceName,
-  );
-  const sourceSummary = stripSourceAttribution(
-    saved?.sourceSummary?.trim() || (merged.sourceUrl ? merged.body : ''),
-    merged.sourceName,
-  );
-  const cleanTitle = stripSourceAttribution(merged.title, merged.sourceName);
-  const cleanBody = stripSourceAttribution(merged.body, merged.sourceName);
-  const cleanCaption = stripSourceAttribution(saved?.caption ?? base.caption, merged.sourceName);
-  const titleIsUnsafe = containsPublisherLanguage(cleanTitle) || hasIncompleteEnding(cleanTitle);
-  const bodyIsUnsafe = containsPublisherLanguage(cleanBody)
-    || hasRepeatedPhrase(cleanBody, 4)
-    || hasIncompleteEnding(cleanBody)
-    || !hasCompleteSentenceEnding(cleanBody);
-  const captionIsUnsafe = containsPublisherLanguage(cleanCaption) || hasRepeatedPhrase(cleanCaption, 5);
-  return {
-    ...merged,
-    title: titleIsUnsafe && sourceTitle && !hasIncompleteEnding(sourceTitle)
-      ? sourceTitle
-      : cleanTitle,
-    body: bodyIsUnsafe && sourceSummary ? completeExcerpt(sourceSummary, 320) : cleanBody,
-    caption: captionIsUnsafe ? '' : cleanCaption,
-    sourceTitle,
-    sourceSummary,
-    imageOptions: Array.isArray(merged.imageOptions) ? merged.imageOptions : [],
-  };
-}
-
-function formatTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Bugün';
-  return new Intl.DateTimeFormat('tr-TR', {
-    timeZone: 'Europe/Istanbul',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
-}
-
-function safeFileName(value: string): string {
-  return value
-    .toLocaleLowerCase('tr-TR')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/ı/g, 'i')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 42) || 'icerik';
-}
-
-function wordCount(value: string): number {
-  return value.trim() ? value.trim().split(/\s+/u).length : 0;
-}
-
-function downloadBlob(blob: Blob, name: string) {
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = name;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-}
-
-async function waitForImages(node: HTMLElement) {
-  const images = Array.from(node.querySelectorAll('img'));
-  await Promise.all(images.map((image) => {
-    const source = image.currentSrc || image.src;
-    const failure = new Error(`Görsel yüklenemedi: ${source.startsWith('data:') ? 'gömülü görsel' : source}`);
-    if (image.complete) {
-      return image.naturalWidth > 0 ? Promise.resolve() : Promise.reject(failure);
-    }
-    return new Promise<void>((resolve, reject) => {
-      const timer = window.setTimeout(() => reject(new Error('Görseller 20 saniyede yüklenemedi.')), 20_000);
-      image.addEventListener('load', () => { window.clearTimeout(timer); resolve(); }, { once: true });
-      image.addEventListener('error', () => { window.clearTimeout(timer); reject(failure); }, { once: true });
-    });
-  }));
-}
-
-const minimumImageWidth = 1080;
-const minimumImageHeight = 650;
-
-function isPublicationQuality(width: number, height: number): boolean {
-  return width >= minimumImageWidth && height >= minimumImageHeight;
-}
-
-function measureImage(src: string): Promise<{ width: number; height: number }> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    const timer = window.setTimeout(() => {
-      image.src = '';
-      reject(new Error('Görsel boyutu okunamadı.'));
-    }, 12_000);
-    image.onload = () => {
-      window.clearTimeout(timer);
-      resolve({ width: image.naturalWidth, height: image.naturalHeight });
-    };
-    image.onerror = () => {
-      window.clearTimeout(timer);
-      reject(new Error('Görsel yüklenemedi.'));
-    };
-    image.src = src;
-  });
-}
-
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') resolve(reader.result);
-      else reject(new Error('İyileştirilen görsel okunamadı.'));
-    };
-    reader.onerror = () => reject(new Error('İyileştirilen görsel okunamadı.'));
-    reader.readAsDataURL(blob);
-  });
-}
-
-async function prepareUpscaleBlob(blob: Blob): Promise<Blob> {
-  const providerSupportsType = ['image/jpeg', 'image/png', 'image/webp'].includes(blob.type);
-  if (providerSupportsType && blob.size <= 12 * 1024 * 1024) return blob;
-  if (typeof createImageBitmap !== 'function') return blob;
-
-  const bitmap = await createImageBitmap(blob);
-  const maxSide = 3840;
-  const scale = Math.min(
-    1,
-    maxSide / bitmap.width,
-    maxSide / bitmap.height,
-  );
-
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.max(32, Math.floor(bitmap.width * scale));
-  canvas.height = Math.max(32, Math.floor(bitmap.height * scale));
-  const context = canvas.getContext('2d');
-  if (!context) {
-    bitmap.close();
-    return blob;
-  }
-  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close();
-
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (result) => result ? resolve(result) : reject(new Error('Görsel upscale için hazırlanamadı.')),
-      'image/webp',
-      0.92,
-    );
-  });
-}
-
-async function upscaleBlobLocally(blob: Blob): Promise<{ blob: Blob; width: number; height: number } | null> {
-  if (typeof createImageBitmap !== 'function') return null;
-  const source = await createImageBitmap(blob);
-  // En fazla 2x: bikübik büyütme detay eklemez, aşırı büyütme bulanıklaştırır.
-  const scale = Math.min(2, minimumImageWidth / source.width, 1920 / source.height);
-  if (scale <= 1.01) {
-    source.close();
-    return null;
-  }
-  const width = Math.round(source.width * scale);
-  const height = Math.round(source.height * scale);
-
-  let resized: ImageBitmap | null = null;
-  try {
-    resized = await createImageBitmap(blob, { resizeWidth: width, resizeHeight: height, resizeQuality: 'high' });
-  } catch {
-    resized = null;
-  }
-
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext('2d');
-  if (!context) {
-    source.close();
-    resized?.close();
-    return null;
-  }
-  context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = 'high';
-  context.drawImage(resized ?? source, 0, 0, width, height);
-  source.close();
-  resized?.close();
-
-  const result = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob((value) => resolve(value), 'image/webp', 0.95);
-  });
-  if (!result) return null;
-  return { blob: result, width, height };
-}
-
-type EnrichmentResponse = {
-  imageUrl?: string;
-  imageToken?: string;
-  imageCandidates?: Array<{ url: string; token: string }>;
-  title?: string;
-  description?: string;
-  resolvedSourceUrl?: string;
-  canonicalPublishedAt?: string;
-  canonicalModifiedAt?: string;
-  freshnessStatus?: FreshnessStatus;
-  error?: string;
-};
-
-type UpscaleStatus = {
-  configured: boolean;
-  provider: string;
-  usage?: ProviderUsage;
-};
-
-type CopyStatus = {
-  configured: boolean;
-  provider: string;
-  model: string;
-  usage?: ProviderUsage;
-  groq?: {
-    configured: boolean;
-    model: string;
-    /** Ücretsiz havuzun deneme sırası, örn. ["Gemini", "Cerebras", "Groq #1"]. */
-    providerOrder?: string[];
-    usage?: { requests: number; limit: number };
-  };
-};
-
-type ProviderUsage = {
-  requests: number;
-  inputTokens: number;
-  outputTokens: number;
-  limit: number;
-};
-
-type GeneratedCopyResponse = {
-  coverTitle?: string;
-  visualText?: string;
-  caption?: string;
-  wordCounts?: { coverTitle: number; visualText: number; caption: number };
-  provider?: string;
-  model?: string;
-  error?: string;
-};
-
-type GroqStatusResponse = {
-  configured: boolean;
-  keyCount: number;
-  analysisModel: string;
-  searchModel: string;
-  /** Ücretsiz havuzun deneme sırası, örn. ["Gemini", "Cerebras", "Groq #1"]. */
-  providerOrder?: string[];
-  usage: {
-    date: string;
-    analysis: number;
-    analysisLimit: number;
-    search: number;
-    searchLimit: number;
-  };
-};
-
-type GroqAnalysisResponse = {
-  candidates?: ContentCandidate[];
-  analyzed?: number;
-  error?: string;
-};
-
-type GapScanResponse = {
-  candidates?: ContentCandidate[];
-  error?: string;
-};
-
-function freshnessLabel(status?: FreshnessStatus): string {
-  if (status === 'today') return 'Bugün doğrulandı';
-  if (status === 'updated-today') return 'Bugün güncellendi';
-  if (status === 'stale') return 'Bugüne ait değil';
-  return 'Tarih kontrol edilecek';
-}
-
-function coverageFromCandidates(
-  candidates: ContentCandidate[],
-  fallback?: DiscoveryResponse['coverage'],
-): NonNullable<DiscoveryResponse['coverage']> {
-  const clusters = new Set(candidates.map((candidate) => candidate.clusterId || candidate.id));
-  const corroborated = new Set(candidates
-    .filter((candidate) => candidate.verification?.status === 'corroborated')
-    .map((candidate) => candidate.clusterId || candidate.id));
-  return {
-    totalDiscovered: candidates.length,
-    uniqueEvents: clusters.size,
-    corroboratedEvents: corroborated.size,
-    withImages: candidates.filter((candidate) => Boolean(candidate.imageUrl)).length,
-    withLocations: candidates.filter((candidate) => Boolean(candidate.location?.label)).length,
-    aiAnalyzed: candidates.filter((candidate) => Boolean(candidate.aiAnalysis)).length,
-    aiPromoted: candidates.filter((candidate) => (
-      Boolean(candidate.aiAnalysis) && candidate.score > (candidate.scoreBreakdown?.total || candidate.score)
-    )).length || fallback?.aiPromoted || 0,
-  };
-}
-
-function CandidateCard({
-  candidate,
-  loading,
-  onSelect,
-}: {
-  candidate: ContentCandidate;
-  loading: boolean;
-  onSelect: () => void;
-}) {
-  const sourceCount = candidate.verification?.sourceCount || 1;
-  const candidateTitle = candidate.readinessIssues?.join(' ') || '';
-  return (
-    <button
-      className={`candidate-card freshness-${candidate.freshnessStatus || 'unverified'}${candidate.breaking ? ' is-breaking' : ''}`}
-      disabled={loading || candidate.freshnessStatus === 'stale'}
-      onClick={onSelect}
-      title={candidateTitle}
-      type="button"
-    >
-      <span className="candidate-thumb">
-        {candidate.imageUrl ? (
-          // Native img keeps proxied source thumbnails independent from Next image optimization.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img alt="" loading="lazy" src={proxied(candidate.imageUrl, candidate.imageToken)} />
-        ) : (
-          <span className="candidate-no-image">DB</span>
-        )}
-        <i>{candidate.score}</i>
-      </span>
-      <span className="candidate-content">
-        <span className="candidate-meta">
-          {candidate.breaking && <b className="breaking-badge">SON DAKİKA</b>}
-          <b>{candidate.kind === 'trend' ? 'TREND' : candidate.kind === 'history' ? 'TARİH' : 'HABER'}</b>
-          <i>{candidate.signal}</i>
-        </span>
-        <strong>{candidate.title}</strong>
-        <small>{candidate.sourceName} · {formatTime(candidate.publishedAt)}</small>
-        <span className="candidate-badges">
-          <i className={`freshness-badge freshness-${candidate.freshnessStatus || 'unverified'}`}>
-            <Clock3 size={8} /> {freshnessLabel(candidate.freshnessStatus)}
-          </i>
-          <i><ShieldCheck size={8} /> {sourceCount} kaynak</i>
-          {candidate.location?.label && <i><MapPin size={8} /> {candidate.location.label}</i>}
-          {candidate.aiAnalysis?.importance !== null && candidate.aiAnalysis?.importance !== undefined && (
-            <i className="ai-badge">Groq {candidate.aiAnalysis.importance}</i>
-          )}
-        </span>
-      </span>
-      {loading
-        ? <LoaderCircle aria-label="Yüksek çözünürlüklü görsel aranıyor" className="spin" size={13} />
-        : <ExternalLink aria-hidden="true" size={13} strokeWidth={1.8} />}
-    </button>
-  );
-}
 
 export function Studio() {
   const [channel, setChannel] = useState<Channel>('news');
@@ -1365,36 +930,84 @@ export function Studio() {
     }
   }
 
+  // Medya üretimi hem ZIP indirmede hem de planlı yayında kullanıldığı için tek yerde toplandı.
+  async function buildMedia(): Promise<BuiltMedia> {
+    if (!coverRef.current || !detailRef.current) throw new Error('Önizleme henüz hazır değil.');
+    await document.fonts.ready;
+    await Promise.all([waitForImages(coverRef.current), waitForImages(detailRef.current)]);
+
+    async function render(node: HTMLDivElement, targetWidth = REEL_WIDTH) {
+      const ratio = targetWidth / node.offsetWidth;
+      return toJpeg(node, {
+        quality: 0.96,
+        pixelRatio: ratio,
+        cacheBust: true,
+        backgroundColor: '#080808',
+      });
+    }
+
+    const [cover, detail] = await Promise.all([
+      render(coverRef.current),
+      render(detailRef.current),
+    ]);
+    const stamp = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date());
+    const base = `deepbrief-${channel}-${stamp}-${safeFileName(draft.title)}`;
+
+    // Gönderi kartından 7 saniyelik, hafif zoom'lu MP4. Kapak görseli JPG olarak kalır.
+    let video: Blob | null = null;
+    let musicNote: string | null = null;
+    let videoNote = 'video atlandı (tarayıcı desteklemiyor, Chrome/Edge gerekli)';
+    if (videoExportSupported()) {
+      setNotice('7 saniyelik video hazırlanıyor…');
+      const selection = musicSelection[channel];
+      const track = selection ? trackById(selection.id) : null;
+      // Zoom'un hiçbir anında büyütme olmaması için kaynak kareyi 1080'in üstünde üret.
+      const frameSource = await render(detailRef.current, Math.round(REEL_WIDTH * REEL_SOURCE_SCALE));
+      const bitmap = await createImageBitmap(await (await fetch(frameSource)).blob());
+      let audio = null;
+      let trackNote = 'müziksiz';
+      if (track && selection) {
+        try {
+          audio = await loadReelAudio({
+            url: trackUrl(track),
+            startSec: selection.startSec,
+            durationSec: REEL_DURATION_SEC,
+            gain: track.gain,
+          });
+          trackNote = track.title;
+        } catch {
+          trackNote = 'müzik yüklenemedi, sessiz';
+        }
+      }
+      try {
+        const { blob, hasAudio } = await encodeReel({
+          image: bitmap,
+          audio,
+          onProgress: setExportProgress,
+        });
+        video = blob;
+        if (track && hasAudio) musicNote = musicCredit(track);
+        videoNote = hasAudio ? `video: ${trackNote}` : 'video: sessiz';
+      } finally {
+        bitmap.close();
+      }
+    }
+
+    return { base, cover, detail, video, videoNote, musicNote };
+  }
+
   async function exportPackage() {
     if (!coverRef.current || !detailRef.current) return;
     setExporting(true);
     setExportProgress(0);
     setNotice('1080 × 1920 dosyalar hazırlanıyor…');
     try {
-      await document.fonts.ready;
-      await Promise.all([waitForImages(coverRef.current), waitForImages(detailRef.current)]);
-
-      async function render(node: HTMLDivElement, targetWidth = REEL_WIDTH) {
-        const ratio = targetWidth / node.offsetWidth;
-        return toJpeg(node, {
-          quality: 0.96,
-          pixelRatio: ratio,
-          cacheBust: true,
-          backgroundColor: '#080808',
-        });
-      }
-
-      const [cover, detail] = await Promise.all([
-        render(coverRef.current),
-        render(detailRef.current),
-      ]);
-      const stamp = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date());
-      const base = `deepbrief-${channel}-${stamp}-${safeFileName(draft.title)}`;
+      const media = await buildMedia();
       const zip = new JSZip();
-      zip.file(`${base}-thumbnail.jpg`, cover.split(',')[1], { base64: true });
-      zip.file(`${base}-gonderi.jpg`, detail.split(',')[1], { base64: true });
-      zip.file(`${base}-caption.txt`, draft.caption.trim());
-      zip.file(`${base}-kaynak.txt`, [
+      zip.file(`${media.base}-thumbnail.jpg`, media.cover.split(',')[1], { base64: true });
+      zip.file(`${media.base}-gonderi.jpg`, media.detail.split(',')[1], { base64: true });
+      zip.file(`${media.base}-caption.txt`, draft.caption.trim());
+      zip.file(`${media.base}-kaynak.txt`, [
         `Kanal: ${channel}`,
         `Tarih: ${today}`,
         `Kaynak: ${draft.sourceName || '-'}`,
@@ -1402,51 +1015,65 @@ export function Studio() {
         `Konum: ${draft.location || '-'}`,
         `Tazelik: ${draft.sourceFreshnessStatus}`,
       ].join('\n'));
+      if (media.video) zip.file(`${media.base}-gonderi.mp4`, media.video);
+      if (media.musicNote) zip.file(`${media.base}-muzik.txt`, media.musicNote);
 
-      // Gönderi kartından 7 saniyelik, hafif zoom'lu MP4. Kapak görseli JPG olarak kalır.
-      let videoNote = 'video eklenmedi';
-      if (videoExportSupported()) {
-        setNotice('7 saniyelik video hazırlanıyor…');
-        const selection = musicSelection[channel];
-        const track = selection ? trackById(selection.id) : null;
-        // Zoom'un hiçbir anında büyütme olmaması için kaynak kareyi 1080'in üstünde üret.
-        const frameSource = await render(detailRef.current, Math.round(REEL_WIDTH * REEL_SOURCE_SCALE));
-        const bitmap = await createImageBitmap(await (await fetch(frameSource)).blob());
-        let audio = null;
-        let musicNote = 'müziksiz';
-        if (track && selection) {
-          try {
-            audio = await loadReelAudio({
-              url: trackUrl(track),
-              startSec: selection.startSec,
-              durationSec: REEL_DURATION_SEC,
-              gain: track.gain,
-            });
-            musicNote = track.title;
-          } catch {
-            musicNote = 'müzik yüklenemedi, sessiz';
-          }
-        }
-        try {
-          const { blob, hasAudio } = await encodeReel({
-            image: bitmap,
-            audio,
-            onProgress: setExportProgress,
-          });
-          zip.file(`${base}-gonderi.mp4`, blob);
-          if (track && hasAudio) zip.file(`${base}-muzik.txt`, musicCredit(track));
-          videoNote = hasAudio ? `video: ${musicNote}` : 'video: sessiz';
-        } finally {
-          bitmap.close();
-        }
-      } else {
-        videoNote = 'video atlandı (tarayıcı desteklemiyor, Chrome/Edge gerekli)';
-      }
-
-      downloadBlob(await zip.generateAsync({ type: 'blob' }), `${base}.zip`);
-      setNotice(`Reels paketi indirildi: thumbnail, gönderi, caption, kaynak notu · ${videoNote}.`);
+      downloadBlob(await zip.generateAsync({ type: 'blob' }), `${media.base}.zip`);
+      setNotice(`Reels paketi indirildi: thumbnail, gönderi, caption, kaynak notu · ${media.videoNote}.`);
     } catch (error) {
       setNotice(error instanceof Error ? `Dışa aktarma başarısız: ${error.message}` : 'Dışa aktarma başarısız.');
+    } finally {
+      setExporting(false);
+      setExportProgress(0);
+    }
+  }
+
+  // Instagram medyayı herkese açık bir HTTPS adresinden çektiği için önce Blob'a yüklenir,
+  // sonra kayıt kuyruğa yazılır. Yayını cron (/api/internal/publish) yapar.
+  async function schedulePost(scheduledAt: Date) {
+    if (!videoExportSupported()) {
+      throw new Error('Bu tarayıcı video dışa aktarmayı desteklemiyor; Chrome veya Edge gerekli.');
+    }
+    setExporting(true);
+    setExportProgress(0);
+    setNotice('Yayın için medya hazırlanıyor…');
+    try {
+      const media = await buildMedia();
+      if (!media.video) throw new Error('Video üretilemedi, planlama iptal edildi.');
+
+      setNotice('Medya Blob deposuna yükleniyor…');
+      const uploadOptions = { access: 'public', handleUploadUrl: '/api/blob/upload' } as const;
+      const [videoBlob, coverBlob] = await Promise.all([
+        upload(`deepbrief/${media.base}.mp4`, media.video, {
+          ...uploadOptions,
+          contentType: 'video/mp4',
+        }),
+        upload(`deepbrief/${media.base}-kapak.jpg`, await (await fetch(media.cover)).blob(), {
+          ...uploadOptions,
+          contentType: 'image/jpeg',
+        }),
+      ]);
+
+      const response = await fetch('/api/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channel,
+          caption: draft.caption.trim(),
+          videoUrl: videoBlob.url,
+          coverUrl: coverBlob.url,
+          scheduledAt: scheduledAt.toISOString(),
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) throw new Error(payload?.error || 'Yayın planlanamadı.');
+      setNotice(
+        `Yayın planlandı: ${new Intl.DateTimeFormat('tr-TR', {
+          timeZone: 'Europe/Istanbul',
+          dateStyle: 'short',
+          timeStyle: 'short',
+        }).format(scheduledAt)} · ${media.videoNote}.`,
+      );
     } finally {
       setExporting(false);
       setExportProgress(0);
@@ -1545,6 +1172,16 @@ export function Studio() {
                 >
                   <b>{discovery.coverage.corroboratedEvents}</b> çok kaynaklı
                 </button>
+                {discovery.coverage.conflictingEvents > 0 && (
+                  <button
+                    aria-pressed={candidateFilters.has('conflict')}
+                    className={`coverage-filter conflict ${candidateFilters.has('conflict') ? 'active' : ''}`}
+                    onClick={() => toggleCandidateFilter('conflict')}
+                    type="button"
+                  >
+                    <b>{discovery.coverage.conflictingEvents}</b> çelişkili
+                  </button>
+                )}
                 <button
                   aria-pressed={candidateFilters.has('with-image')}
                   className={`coverage-filter ${candidateFilters.has('with-image') ? 'active' : ''}`}
@@ -1942,6 +1579,12 @@ export function Studio() {
                 : 'ZIP olarak indir'}
             </button>
           </div>
+          <SchedulePanel
+            busy={exporting}
+            channel={channel}
+            onSchedule={schedulePost}
+            progress={exportProgress}
+          />
         </section>
       </div>
 

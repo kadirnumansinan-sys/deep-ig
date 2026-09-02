@@ -13,11 +13,13 @@ Sistem haber seçimini tek bir yapay zekâ kararına bırakmaz. Doğrudan yayın
 
 ## Haber ve kalite katmanı
 
-- Türkiye için TRT Haber, Anadolu Ajansı ve Habertürk doğrudan RSS akışları.
-- Global için BBC, The Guardian, Al Jazeera ve NPR doğrudan RSS akışları.
+- Kaynak listesi kodda değil, [`config/news-sources.json`](config/news-sources.json) dosyasındadır: Türkiye ve dünya için 38 yayıncı akışı. Yeni bir kaynak eklemek için bu dosyaya ad, RSS adresi, kanal ve güven puanı yazmak yeterlidir.
+- Her kaynağın 0–100 arası bir güven puanı vardır; resmî kurum ve ajanslar en yüksek, toplayıcılar en düşük ağırlığı alır. Aynı haber birden çok kaynaktan geldiğinde metin ve görsel, güveni yüksek kaynaktan seçilir.
 - Google News, Google Trends, GDELT ve isteğe bağlı NewsAPI destek kaynakları.
 - `Europe/Istanbul` gün sınırı; yayıncı RSS tarihi doğrudan doğrulanır, toplayıcı tarihi yayın sayfası okunana kadar “tarih kontrol edilecek” kalır.
 - Olay kümeleme, bağımsız kaynak sayısı, açıklanabilir önem puanı, şehir/ülke çıkarımı ve kaynak sağlık görünümü.
+- **Çapraz kontrol:** Aynı olayı anlatan kaynaklar can kaybı, yaralı, gözaltı, deprem büyüklüğü, oran ve ülke bilgisi bakımından karşılaştırılır. İki farklı kaynak uyuşmayan değer verdiğinde aday kartı kırmızı “Kaynaklar çelişiyor” uyarısı ve hangi kaynağın ne dediğini gösteren satırlarla işaretlenir; listede yalnızca çelişkili haberleri gösteren bir filtre vardır. Kişi adları bilerek karşılaştırılmaz, yanlış alarm ürettiği için.
+- Yapay zekâya verilen talimat metinleri [`config/ai-prompts.json`](config/ai-prompts.json) dosyasındadır; ifade değiştirmek için kod dosyalarına dokunmak gerekmez.
 - Haber sayfasından Open Graph, Twitter, JSON-LD, `srcset` ve yüksek çözünürlüklü görsel adaylarını bulma. Düşük kaliteli görseller engellenmez.
 - Kaynak adını yayın metninden çıkaran, tekrarı ve kaynakta olmayan bilgiyi reddeden metin kalite kontrolü.
 - Görsel içi metin 18–30, Instagram caption metni 50–95 kelime.
@@ -43,6 +45,30 @@ OpenAI Responses API kullanım alanları ve GPT Image 2 özellikleri için [resm
 - API anahtarları yalnızca sunucu ortamında okunur; tarayıcıya gönderilmez.
 
 Kimlik doğrulama `AUTH_REQUIRED=true` yapıldığında etkinleşir. İlk sahibi oluşturmak için `.env` içinde `AUTH_SECRET` (en az 32 rastgele karakter), `AUTH_BOOTSTRAP_EMAIL`, `AUTH_BOOTSTRAP_PASSWORD` (en az 12 karakter) ve isteğe bağlı `AUTH_BOOTSTRAP_NAME` girilir. İlk girişte TOTP kurulumu zorunludur; sahibi panel içinden iki ek editör hesabı açabilir.
+
+## Planlı Instagram yayını
+
+Studio’daki **Planlı Instagram yayını** panelinden bir saat seçilir; medya tarayıcıda üretilir, Vercel Blob’a yüklenir ve kuyruğa yazılır. Yayını `/api/internal/publish` uç noktası yapar: zamanı gelen kayıt için Reels konteyneri oluşturur, sonraki tetiklemede konteyner hazır olduğunda yayınlar. Kanal → hesap eşleşmesi birebirdir (`news`, `media`, `international`, `history`).
+
+Kurulum (Vercel):
+
+1. **Storage → Blob store** oluştur (**Public**). `BLOB_READ_WRITE_TOKEN` otomatik eklenir.
+2. **Storage → Neon Postgres** ekle. `DATABASE_URL` otomatik eklenir; tablolar ilk çalıştırmada oluşturulur.
+3. Dört hesap için `IG_<KANAL>_USER_ID` ve `IG_<KANAL>_TOKEN` değişkenlerini gir. `IG_<KANAL>_HOST` boşsa `graph.instagram.com` (Instagram Login) varsayılır; Facebook Login / Sayfa token’ı kullanıyorsan `graph.facebook.com` yaz.
+4. `DEEPBRIEF_CRON_TOKEN` için uzun ve rastgele bir değer gir.
+5. **Harici cron** (Hobby planında zorunlu): cron-job.org veya GitHub Actions ile `*/5 * * * *`
+
+   ```
+   https://<site>/api/internal/publish?token=<DEEPBRIEF_CRON_TOKEN>
+   ```
+
+   Token `x-deepbrief-internal` başlığıyla da gönderilebilir. Hobby planında Vercel cron günde yalnızca bir kez çalışır; `vercel.json`’daki günlük giriş sadece emniyet ağıdır. Pro’ya geçilirse `vercel.json`’da `*/5 * * * *` yeterlidir.
+
+Notlar:
+
+- Instagram sınırı 24 saatte 100 API gönderisidir. Reel 9:16 ve 5–90 saniye olmalıdır; buradaki 7 saniyelik 1080×1920 çıktı uygundur.
+- Instagram Login token’ı 60 gün geçerlidir; cron, süre dolmasına 7 günden az kalınca otomatik yeniler ve yeni token’ı veritabanına yazar. Facebook Sayfa token’larında yenileme gerekmez.
+- Video dışa aktarma WebCodecs kullanır; planlama için Chrome veya Edge gerekir.
 
 ## Docker / VPS
 

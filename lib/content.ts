@@ -22,12 +22,20 @@ export type CandidateScore = {
   novelty: number;
 };
 
+/** Aynı olayda kaynakların farklı söylediği tek bir bilgi (ör. can kaybı). */
+export type CandidateConflict = {
+  key: string;
+  label: string;
+  values: Array<{ sourceName: string; value: string }>;
+};
+
 export type CandidateVerification = {
   status: VerificationStatus;
   sourceCount: number;
   sourceNames: string[];
   checkedAt: string;
   notes: string[];
+  conflicts?: CandidateConflict[];
 };
 
 export type CandidateAiAnalysis = {
@@ -85,6 +93,7 @@ export type DiscoveryResponse = {
     totalDiscovered: number;
     uniqueEvents: number;
     corroboratedEvents: number;
+    conflictingEvents: number;
     withImages: number;
     withLocations: number;
     aiAnalyzed: number;

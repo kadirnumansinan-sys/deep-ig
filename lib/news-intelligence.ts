@@ -6,6 +6,8 @@ import type {
   ContentCandidate,
   FreshnessStatus,
 } from '@/lib/content';
+import { conflictNote, findConflicts } from '@/lib/cross-check';
+import { registryTrust } from '@/lib/discovery/sources/registry';
 
 const TURKEY_CITIES = [
   'Adana', 'Adıyaman', 'Afyonkarahisar', 'Ağrı', 'Aksaray', 'Amasya', 'Ankara', 'Antalya',
@@ -141,14 +143,20 @@ export function clusterCandidates(candidates: ContentCandidate[]): ContentCandid
   const byIndex = new Map<number, { clusterId: string; verification: CandidateVerification }>();
   clusters.forEach((cluster) => {
     const sourceNames = Array.from(new Set(cluster.indexes.map((index) => candidates[index].sourceName))).filter(Boolean);
+    // Aynı olayı veren kaynaklar sayı ya da yer konusunda ayrışıyorsa haber doğrulanmış sayılmaz.
+    const conflicts = findConflicts(cluster.indexes.map((index) => candidates[index]));
+    const corroborated = sourceNames.length >= 2;
     const verification: CandidateVerification = {
-      status: sourceNames.length >= 2 ? 'corroborated' : 'single-source',
+      status: conflicts.length > 0 ? 'conflict' : corroborated ? 'corroborated' : 'single-source',
       sourceCount: sourceNames.length,
       sourceNames,
       checkedAt: new Date().toISOString(),
-      notes: sourceNames.length >= 2
-        ? ['Benzer olay birden fazla bağımsız kaynakta bulundu.']
-        : ['Şimdilik yalnızca tek kaynakta bulundu; editör kontrolü gerekli.'],
+      notes: conflicts.length > 0
+        ? ['Kaynaklar aynı olayda farklı bilgi veriyor; yayından önce doğrulayın.', ...conflicts.map(conflictNote)]
+        : corroborated
+          ? ['Benzer olay birden fazla bağımsız kaynakta bulundu.']
+          : ['Şimdilik yalnızca tek kaynakta bulundu; editör kontrolü gerekli.'],
+      ...(conflicts.length > 0 ? { conflicts } : {}),
     };
     cluster.indexes.forEach((index) => byIndex.set(index, { clusterId: cluster.id, verification }));
   });
@@ -202,9 +210,14 @@ export function detectLocation(title: string, summary: string, channel: Channel)
   return null;
 }
 
-function sourceTrust(sourceName: string, sourceUrl: string, sourceType: ContentCandidate['sourceType']): number {
+export function sourceTrust(sourceName: string, sourceUrl: string, sourceType: ContentCandidate['sourceType']): number {
   if (sourceType === 'official' || /\.gov\.tr(?:\/|$)/iu.test(sourceUrl)) return 15;
   if (sourceType === 'encyclopedia') return 10;
+  // `config/news-sources.json` içindeki 0-100 puanı, buradaki 0-15 ölçeğine taşınır.
+  const registered = registryTrust(sourceName, sourceUrl);
+  if (registered !== undefined) {
+    return Math.max(5, Math.min(15, Math.round(7 + (registered - 55) * 0.175)));
+  }
   if (/\b(trt haber|anadolu ajansı|bbc|reuters|associated press|ap news)\b/iu.test(sourceName)) return 13;
   if (sourceType === 'publisher') return 11;
   if (sourceType === 'trend') return 8;
@@ -293,6 +306,7 @@ export function enrichIntelligence(candidates: ContentCandidate[], channel: Chan
       !candidate.imageUrl ? 'Görsel henüz bulunamadı.' : '',
       !candidate.location && channel !== 'history' ? 'Konum henüz doğrulanmadı.' : '',
       candidate.verification?.status === 'single-source' ? 'İkinci bağımsız kaynak bulunamadı.' : '',
+      candidate.verification?.status === 'conflict' ? 'Kaynaklar çelişiyor; bilgiyi teyit edin.' : '',
     ].filter(Boolean);
     return {
       ...candidate,
@@ -305,14 +319,27 @@ export function enrichIntelligence(candidates: ContentCandidate[], channel: Chan
   });
 }
 
+function trustRank(candidate: ContentCandidate): number {
+  const base = sourceTrust(candidate.sourceName, candidate.sourceUrl, candidate.sourceType);
+  // Eşitlikte görseli ve tarihi olan kopya tercih edilir.
+  return base * 10 + (candidate.imageUrl ? 2 : 0) + (candidate.canonicalPublishedAt ? 1 : 0);
+}
+
+// Aynı haber birkaç kaynaktan geldiyse metni daha güvenilir kaynağınkiyle tutarız.
 export function deduplicateCandidates(candidates: ContentCandidate[]): ContentCandidate[] {
   const unique: ContentCandidate[] = [];
   for (const candidate of candidates) {
-    const duplicate = unique.find((existing) => (
+    const duplicateIndex = unique.findIndex((existing) => (
       existing.sourceUrl === candidate.sourceUrl
       || titleSimilarity(existing.title, candidate.title) >= 0.92
     ));
-    if (!duplicate) unique.push(candidate);
+    if (duplicateIndex === -1) {
+      unique.push(candidate);
+      continue;
+    }
+    if (trustRank(candidate) > trustRank(unique[duplicateIndex])) {
+      unique[duplicateIndex] = candidate;
+    }
   }
   return unique;
 }

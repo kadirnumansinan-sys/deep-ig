@@ -3,6 +3,10 @@
     {
       "path": "/api/internal/poll",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/internal/publish",
+      "schedule": "5 3 * * *"
     }
   ]
 }

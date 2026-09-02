@@ -1,6 +1,6 @@
 import type { ContentCandidate } from '@/lib/content';
 
-export type CandidateFilter = 'corroborated' | 'with-image' | 'with-location';
+export type CandidateFilter = 'corroborated' | 'conflict' | 'with-image' | 'with-location';
 
 export function filterCandidates(
   candidates: ContentCandidate[],
@@ -20,6 +20,7 @@ export function filterCandidates(
       !activeFilters.has('corroborated')
       || candidate.verification?.status === 'corroborated'
     )
+    && (!activeFilters.has('conflict') || candidate.verification?.status === 'conflict')
     && (!activeFilters.has('with-image') || Boolean(candidate.imageUrl))
     && (!activeFilters.has('with-location') || Boolean(candidate.location?.label))
   ));

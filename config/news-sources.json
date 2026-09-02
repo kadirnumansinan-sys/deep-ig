@@ -1,0 +1,490 @@
+{
+  "//": "Haber kaynakları veri dosyası. Yeni kaynak eklemek için kod değiştirmek gerekmez; buraya bir kayıt eklemek yeterlidir.",
+  "//trust": "trust 0-100 arası güvenilirlik ağırlığıdır. Aynı olay birden çok kaynaktan geldiğinde metni yüksek trust'lı kaynaktan seçilir ve puanlamada kaynak güveni buradan hesaplanır.",
+  "//feeds": "Her akış ya tam 'url' ya da 'urlTemplate' ile birleşen 'path' verir. 'channels' akışın hangi sayfalarda okunacağını söyler.",
+  "defaultTrust": 60,
+  "sources": [
+    {
+      "id": "trt-rss",
+      "label": "TRT Haber · doğrudan RSS",
+      "sourceName": "TRT Haber",
+      "language": "tr",
+      "trust": 92,
+      "domains": ["trthaber.com"],
+      "urlTemplate": "https://www.trthaber.com/{path}_articles.rss",
+      "feeds": [
+        { "path": "sondakika", "channels": ["news"], "breaking": true },
+        { "path": "gundem", "channels": ["news"] },
+        { "path": "turkiye", "channels": ["news", "media"] },
+        { "path": "ekonomi", "channels": ["news"] },
+        { "path": "bilim_teknoloji", "channels": ["news"] },
+        { "path": "yasam", "channels": ["media"] },
+        { "path": "guncel", "channels": ["media"] },
+        { "path": "egitim", "channels": ["media"] },
+        { "path": "kultur_sanat", "channels": ["media"] },
+        { "path": "saglik", "channels": ["media"] }
+      ]
+    },
+    {
+      "id": "aa-rss",
+      "label": "Anadolu Ajansı · doğrudan RSS",
+      "sourceName": "Anadolu Ajansı",
+      "language": "tr",
+      "trust": 95,
+      "domains": ["aa.com.tr"],
+      "urlTemplate": "https://www.aa.com.tr/tr/rss/default?cat={path}",
+      "feeds": [
+        { "path": "guncel", "channels": ["news"] },
+        { "path": "politika", "channels": ["news"] },
+        { "path": "ekonomi", "channels": ["news"] },
+        { "path": "yasam", "channels": ["media"] },
+        { "path": "kultur-sanat", "channels": ["media"] },
+        { "path": "bilim-teknoloji", "channels": ["media"] },
+        { "path": "saglik", "channels": ["media"] }
+      ]
+    },
+    {
+      "id": "haberturk-rss",
+      "label": "Habertürk · doğrudan RSS",
+      "sourceName": "Habertürk",
+      "language": "tr",
+      "trust": 80,
+      "domains": ["haberturk.com"],
+      "urlTemplate": "https://www.haberturk.com/rss/{path}",
+      "feeds": [
+        { "path": "manset.xml", "channels": ["news"] },
+        { "path": "kategori/gundem.xml", "channels": ["news"] },
+        { "path": "ekonomi.xml", "channels": ["news"] },
+        { "path": "kategori/siyaset.xml", "channels": ["news"] },
+        { "path": "yerel-haberler.xml", "channels": ["media"] },
+        { "path": "kategori/yasam.xml", "channels": ["media"] },
+        { "path": "kategori/saglik.xml", "channels": ["media"] },
+        { "path": "kategori/kultur-sanat.xml", "channels": ["media"] },
+        { "path": "kategori/teknoloji.xml", "channels": ["media"] }
+      ]
+    },
+    {
+      "id": "ntv-rss",
+      "label": "NTV · doğrudan RSS",
+      "sourceName": "NTV",
+      "language": "tr",
+      "trust": 84,
+      "domains": ["ntv.com.tr"],
+      "urlTemplate": "https://www.ntv.com.tr/{path}.rss",
+      "feeds": [
+        { "path": "son-dakika", "channels": ["news"], "breaking": true },
+        { "path": "turkiye", "channels": ["news"] },
+        { "path": "yasam", "channels": ["media"] },
+        { "path": "teknoloji", "channels": ["media"] },
+        { "path": "saglik", "channels": ["media"] }
+      ]
+    },
+    {
+      "id": "sozcu-rss",
+      "label": "Sözcü · doğrudan RSS",
+      "sourceName": "Sözcü",
+      "language": "tr",
+      "trust": 76,
+      "domains": ["sozcu.com.tr"],
+      "feeds": [
+        { "url": "https://www.sozcu.com.tr/rss/gundem.xml", "channels": ["news"] }
+      ]
+    },
+    {
+      "id": "cumhuriyet-rss",
+      "label": "Cumhuriyet · doğrudan RSS",
+      "sourceName": "Cumhuriyet",
+      "language": "tr",
+      "trust": 78,
+      "domains": ["cumhuriyet.com.tr"],
+      "feeds": [
+        { "url": "https://www.cumhuriyet.com.tr/rss", "channels": ["news", "media"] }
+      ]
+    },
+    {
+      "id": "dw-tr-rss",
+      "label": "DW Türkçe · doğrudan RSS",
+      "sourceName": "DW Türkçe",
+      "language": "tr",
+      "trust": 88,
+      "domains": ["dw.com"],
+      "feeds": [
+        { "url": "https://rss.dw.com/xml/rss-tur-all", "channels": ["news", "media"] }
+      ]
+    },
+    {
+      "id": "bbc-tr-rss",
+      "label": "BBC Türkçe · doğrudan RSS",
+      "sourceName": "BBC Türkçe",
+      "language": "tr",
+      "trust": 92,
+      "feeds": [
+        { "url": "https://feeds.bbci.co.uk/turkce/rss.xml", "channels": ["news", "media"] }
+      ]
+    },
+    {
+      "id": "hurriyet-rss",
+      "label": "Hürriyet · doğrudan RSS",
+      "sourceName": "Hürriyet",
+      "language": "tr",
+      "trust": 80,
+      "domains": ["hurriyet.com.tr"],
+      "urlTemplate": "https://www.hurriyet.com.tr/rss/{path}",
+      "feeds": [
+        { "path": "gundem", "channels": ["news"] },
+        { "path": "ekonomi", "channels": ["news"] },
+        { "path": "dunya", "channels": ["news"] },
+        { "path": "yasam", "channels": ["media"] },
+        { "path": "teknoloji", "channels": ["media"] },
+        { "path": "saglik", "channels": ["media"] }
+      ]
+    },
+    {
+      "id": "milliyet-rss",
+      "label": "Milliyet · doğrudan RSS",
+      "sourceName": "Milliyet",
+      "language": "tr",
+      "trust": 78,
+      "domains": ["milliyet.com.tr"],
+      "urlTemplate": "https://www.milliyet.com.tr/rss/rssnew/{path}.xml",
+      "feeds": [
+        { "path": "gundemrss", "channels": ["news"] },
+        { "path": "ekonomirss", "channels": ["news"] },
+        { "path": "dunyarss", "channels": ["news"] },
+        { "path": "yasamrss", "channels": ["media"] },
+        { "path": "teknolojirss", "channels": ["media"] }
+      ]
+    },
+    {
+      "id": "sabah-rss",
+      "label": "Sabah · doğrudan RSS",
+      "sourceName": "Sabah",
+      "language": "tr",
+      "trust": 74,
+      "domains": ["sabah.com.tr"],
+      "urlTemplate": "https://www.sabah.com.tr/rss/{path}.xml",
+      "feeds": [
+        { "path": "gundem", "channels": ["news"] },
+        { "path": "ekonomi", "channels": ["news"] },
+        { "path": "yasam", "channels": ["media"] },
+        { "path": "teknoloji", "channels": ["media"] }
+      ]
+    },
+    {
+      "id": "cnnturk-rss",
+      "label": "CNN Türk · doğrudan RSS",
+      "sourceName": "CNN Türk",
+      "language": "tr",
+      "trust": 80,
+      "domains": ["cnnturk.com"],
+      "feeds": [
+        { "url": "https://www.cnnturk.com/feed/rss/all/news", "channels": ["news", "media"] }
+      ]
+    },
+    {
+      "id": "t24-rss",
+      "label": "T24 · doğrudan RSS",
+      "sourceName": "T24",
+      "language": "tr",
+      "trust": 82,
+      "domains": ["t24.com.tr"],
+      "feeds": [
+        { "url": "https://t24.com.tr/rss", "channels": ["news", "media"] }
+      ]
+    },
+    {
+      "id": "bianet-rss",
+      "label": "Bianet · doğrudan RSS",
+      "sourceName": "Bianet",
+      "language": "tr",
+      "trust": 82,
+      "domains": ["bianet.org"],
+      "feeds": [
+        { "url": "https://bianet.org/rss", "channels": ["news", "media"] }
+      ]
+    },
+    {
+      "id": "evrensel-rss",
+      "label": "Evrensel · doğrudan RSS",
+      "sourceName": "Evrensel",
+      "language": "tr",
+      "trust": 74,
+      "domains": ["evrensel.net"],
+      "feeds": [
+        { "url": "https://www.evrensel.net/rss/haber.xml", "channels": ["news", "media"] }
+      ]
+    },
+    {
+      "id": "diken-rss",
+      "label": "Diken · doğrudan RSS",
+      "sourceName": "Diken",
+      "language": "tr",
+      "trust": 74,
+      "domains": ["diken.com.tr"],
+      "feeds": [
+        { "url": "https://www.diken.com.tr/feed/", "channels": ["news", "media"] }
+      ]
+    },
+    {
+      "id": "euronews-tr-rss",
+      "label": "Euronews Türkçe · doğrudan RSS",
+      "sourceName": "Euronews Türkçe",
+      "language": "tr",
+      "trust": 86,
+      "domains": ["tr.euronews.com"],
+      "feeds": [
+        { "url": "https://tr.euronews.com/rss?level=theme&name=news", "channels": ["news", "media"] }
+      ]
+    },
+    {
+      "id": "haberler-rss",
+      "label": "Haberler.com · toplayıcı akış",
+      "sourceName": "Haberler.com",
+      "language": "tr",
+      "trust": 55,
+      "sourceType": "aggregator",
+      "domains": ["haberler.com"],
+      "feeds": [
+        { "url": "https://rss.haberler.com/rss.asp?kategori=sondakika", "channels": ["news"] },
+        { "url": "https://rss.haberler.com/rss.asp?kategori=yasam", "channels": ["media"] }
+      ]
+    },
+    {
+      "id": "bbc-rss",
+      "label": "BBC News · doğrudan RSS",
+      "sourceName": "BBC News",
+      "language": "en",
+      "trust": 96,
+      "domains": ["bbc.co.uk", "bbc.com"],
+      "urlTemplate": "https://feeds.bbci.co.uk/news/{path}/rss.xml",
+      "feeds": [
+        { "path": "world", "channels": ["international"] },
+        { "path": "business", "channels": ["international"] },
+        { "path": "technology", "channels": ["international"] },
+        { "path": "science_and_environment", "channels": ["international"] }
+      ]
+    },
+    {
+      "id": "guardian-rss",
+      "label": "The Guardian · doğrudan RSS",
+      "sourceName": "The Guardian",
+      "language": "en",
+      "trust": 90,
+      "domains": ["theguardian.com"],
+      "urlTemplate": "https://www.theguardian.com/{path}/rss",
+      "feeds": [
+        { "path": "world", "channels": ["international"] },
+        { "path": "business", "channels": ["international"] },
+        { "path": "environment", "channels": ["international"] },
+        { "path": "technology", "channels": ["international"] }
+      ]
+    },
+    {
+      "id": "aljazeera-rss",
+      "label": "Al Jazeera · doğrudan RSS",
+      "sourceName": "Al Jazeera",
+      "language": "en",
+      "trust": 88,
+      "domains": ["aljazeera.com"],
+      "feeds": [
+        { "url": "https://www.aljazeera.com/xml/rss/all.xml", "channels": ["international"] }
+      ]
+    },
+    {
+      "id": "npr-rss",
+      "label": "NPR World · doğrudan RSS",
+      "sourceName": "NPR",
+      "language": "en",
+      "trust": 90,
+      "domains": ["npr.org"],
+      "feeds": [
+        { "url": "https://feeds.npr.org/1004/rss.xml", "channels": ["international"] }
+      ]
+    },
+    {
+      "id": "reuters-rss",
+      "label": "Reuters · doğrudan RSS",
+      "sourceName": "Reuters",
+      "language": "en",
+      "trust": 98,
+      "domains": ["reuters.com"],
+      "feeds": [
+        { "url": "https://www.reuters.com/world/feed/", "channels": ["international"] }
+      ]
+    },
+    {
+      "id": "sky-rss",
+      "label": "Sky News · doğrudan RSS",
+      "sourceName": "Sky News",
+      "language": "en",
+      "trust": 86,
+      "domains": ["news.sky.com"],
+      "feeds": [
+        { "url": "https://feeds.skynews.com/feeds/rss/world.xml", "channels": ["international"] }
+      ]
+    },
+    {
+      "id": "france24-rss",
+      "label": "France 24 · doğrudan RSS",
+      "sourceName": "France 24",
+      "language": "en",
+      "trust": 88,
+      "domains": ["france24.com"],
+      "feeds": [
+        { "url": "https://www.france24.com/en/rss", "channels": ["international"] }
+      ]
+    },
+    {
+      "id": "cnn-rss",
+      "label": "CNN International · doğrudan RSS",
+      "sourceName": "CNN",
+      "language": "en",
+      "trust": 85,
+      "domains": ["cnn.com"],
+      "feeds": [
+        {
+          "//": "Eski http uç noktası; https sürümü TLS hatası veriyor (sunucudan çekildiği için güvenli).",
+          "url": "http://rss.cnn.com/rss/edition_world.rss",
+          "channels": ["international"]
+        }
+      ]
+    },
+    {
+      "id": "dw-en-rss",
+      "label": "DW English · doğrudan RSS",
+      "sourceName": "DW",
+      "language": "en",
+      "trust": 90,
+      "feeds": [
+        { "url": "https://rss.dw.com/rdf/rss-en-all", "channels": ["international"] }
+      ]
+    },
+    {
+      "id": "euronews-en-rss",
+      "label": "Euronews · doğrudan RSS",
+      "sourceName": "Euronews",
+      "language": "en",
+      "trust": 85,
+      "domains": ["euronews.com"],
+      "feeds": [
+        { "url": "https://www.euronews.com/rss?level=theme&name=news", "channels": ["international"] }
+      ]
+    },
+    {
+      "id": "nytimes-rss",
+      "label": "The New York Times · doğrudan RSS",
+      "sourceName": "The New York Times",
+      "language": "en",
+      "trust": 93,
+      "domains": ["nytimes.com"],
+      "urlTemplate": "https://rss.nytimes.com/services/xml/rss/nyt/{path}.xml",
+      "feeds": [
+        { "path": "World", "channels": ["international"] },
+        { "path": "Business", "channels": ["international"] }
+      ]
+    },
+    {
+      "id": "washingtonpost-rss",
+      "label": "The Washington Post · doğrudan RSS",
+      "sourceName": "The Washington Post",
+      "language": "en",
+      "trust": 90,
+      "domains": ["washingtonpost.com"],
+      "feeds": [
+        { "url": "https://feeds.washingtonpost.com/rss/world", "channels": ["international"] }
+      ]
+    },
+    {
+      "id": "cbc-rss",
+      "label": "CBC World · doğrudan RSS",
+      "sourceName": "CBC News",
+      "language": "en",
+      "trust": 88,
+      "domains": ["cbc.ca"],
+      "feeds": [
+        { "url": "https://www.cbc.ca/webfeed/rss/rss-world", "channels": ["international"] }
+      ]
+    },
+    {
+      "id": "abc-au-rss",
+      "label": "ABC News Australia · doğrudan RSS",
+      "sourceName": "ABC News (Australia)",
+      "language": "en",
+      "trust": 88,
+      "domains": ["abc.net.au"],
+      "feeds": [
+        { "url": "https://www.abc.net.au/news/feed/51120/rss.xml", "channels": ["international"] }
+      ]
+    },
+    {
+      "id": "cnbc-rss",
+      "label": "CNBC World · doğrudan RSS",
+      "sourceName": "CNBC",
+      "language": "en",
+      "trust": 84,
+      "domains": ["cnbc.com"],
+      "feeds": [
+        { "url": "https://www.cnbc.com/id/100727362/device/rss/rss.html", "channels": ["international"] }
+      ]
+    },
+    {
+      "id": "politico-eu-rss",
+      "label": "Politico Europe · doğrudan RSS",
+      "sourceName": "Politico Europe",
+      "language": "en",
+      "trust": 82,
+      "domains": ["politico.eu"],
+      "feeds": [
+        { "url": "https://www.politico.eu/feed/", "channels": ["international"] }
+      ]
+    },
+    {
+      "id": "un-news-rss",
+      "label": "UN News · resmî akış",
+      "sourceName": "UN News",
+      "language": "en",
+      "trust": 96,
+      "sourceType": "official",
+      "domains": ["news.un.org", "un.org"],
+      "feeds": [
+        { "url": "https://news.un.org/feed/subscribe/en/news/all/rss.xml", "channels": ["international"] }
+      ]
+    },
+    {
+      "id": "who-rss",
+      "label": "WHO · resmî akış",
+      "sourceName": "World Health Organization",
+      "language": "en",
+      "trust": 96,
+      "sourceType": "official",
+      "domains": ["who.int"],
+      "feeds": [
+        { "url": "https://www.who.int/rss-feeds/news-english.xml", "channels": ["international"] }
+      ]
+    },
+    {
+      "id": "nasa-rss",
+      "label": "NASA · resmî akış",
+      "sourceName": "NASA",
+      "language": "en",
+      "trust": 95,
+      "sourceType": "official",
+      "domains": ["nasa.gov"],
+      "feeds": [
+        { "url": "https://www.nasa.gov/rss/dyn/breaking_news.rss", "channels": ["international"] }
+      ]
+    },
+    {
+      "id": "yahoo-news-rss",
+      "label": "Yahoo News · toplayıcı akış",
+      "sourceName": "Yahoo News",
+      "language": "en",
+      "trust": 60,
+      "sourceType": "aggregator",
+      "domains": ["news.yahoo.com"],
+      "feeds": [
+        { "url": "https://news.yahoo.com/rss/world", "channels": ["international"] }
+      ]
+    }
+  ]
+}
