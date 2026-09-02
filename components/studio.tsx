@@ -393,6 +393,8 @@ type CopyStatus = {
   groq?: {
     configured: boolean;
     model: string;
+    /** Ücretsiz havuzun deneme sırası, örn. ["Gemini", "Cerebras", "Groq #1"]. */
+    providerOrder?: string[];
     usage?: { requests: number; limit: number };
   };
 };
@@ -419,6 +421,8 @@ type GroqStatusResponse = {
   keyCount: number;
   analysisModel: string;
   searchModel: string;
+  /** Ücretsiz havuzun deneme sırası, örn. ["Gemini", "Cerebras", "Groq #1"]. */
+  providerOrder?: string[];
   usage: {
     date: string;
     analysis: number;
@@ -551,7 +555,14 @@ export function Studio() {
   const [captionOnlyBusy, setCaptionOnlyBusy] = useState(false);
   const [copyConfigured, setCopyConfigured] = useState<boolean | null>(null);
   const [copyUsage, setCopyUsage] = useState<ProviderUsage | null>(null);
-  const [groqCopy, setGroqCopy] = useState<{ configured: boolean; requests: number; limit: number } | null>(null);
+  const [groqCopy, setGroqCopy] = useState<
+    { configured: boolean; requests: number; limit: number; providerOrder: string[] } | null
+  >(null);
+  // Ücretsiz havuzda sıra Gemini → Cerebras → Groq; etiket sabit "Groq" yazmak yerine
+  // sunucudan gelen gerçek sırayı gösterir.
+  const freePoolLabel = groqCopy?.providerOrder?.length
+    ? groqCopy.providerOrder.join(' → ')
+    : 'ücretsiz havuz';
   const [locating, setLocating] = useState(false);
   const [groqStatus, setGroqStatus] = useState<GroqStatusResponse | null>(null);
   const [groqChecking, setGroqChecking] = useState(false);
@@ -856,6 +867,7 @@ export function Studio() {
             configured: Boolean(body.groq.configured),
             requests: body.groq.usage?.requests ?? 0,
             limit: body.groq.usage?.limit ?? 30,
+            providerOrder: body.groq.providerOrder ?? [],
           }
           : null);
       })
@@ -1198,7 +1210,7 @@ export function Studio() {
             caption: body.caption || current[targetChannel].caption,
           },
       }));
-      const providerLabel = body.provider === 'groq' ? 'Groq (ücretsiz)' : 'OpenAI';
+      const providerLabel = body.provider === 'groq' ? `${freePoolLabel} (ücretsiz)` : 'OpenAI';
       setNotice(only === 'caption'
         ? `Gönderi açıklaması ${providerLabel} ile yenilendi: ${body.wordCounts?.caption ?? wordCount(body.caption)} kelime. Kapak ve gönderi metni değişmedi.`
         : `Metinler ${providerLabel} ile tamamlandı: kapak ${body.wordCounts?.coverTitle ?? wordCount(body.coverTitle)} kelime, gönderi ${body.wordCounts?.visualText ?? wordCount(body.visualText)} kelime, caption ${body.wordCounts?.caption ?? wordCount(body.caption)} kelime.`);
@@ -1216,6 +1228,7 @@ export function Studio() {
               configured: Boolean(status.groq.configured),
               requests: status.groq.usage?.requests ?? 0,
               limit: status.groq.usage?.limit ?? 30,
+              providerOrder: status.groq.providerOrder ?? [],
             });
           }
         })
@@ -1611,7 +1624,11 @@ export function Studio() {
             </div>
             {groqStatus?.configured && (
               <div className="groq-budget">
-                <span><ShieldCheck size={11} /> Groq {groqChecking ? 'kontrol ediyor…' : 'kota korumalı'}</span>
+                <span>
+                  <ShieldCheck size={11} />
+                  {' '}{groqStatus.providerOrder?.join(' → ') || 'Ücretsiz havuz'}
+                  {' '}{groqChecking ? 'kontrol ediyor…' : 'kota korumalı'}
+                </span>
                 <small>
                   Analiz {groqStatus.usage.analysis}/{groqStatus.usage.analysisLimit}
                   {' · '}arama {groqStatus.usage.search}/{groqStatus.usage.searchLimit}
@@ -1624,7 +1641,7 @@ export function Studio() {
                 <span><Sparkles size={11} /> Metin/görsel maliyet koruması</span>
                 <small>
                   Metin OpenAI {copyUsage?.requests ?? 0}/{copyUsage?.limit ?? 40}
-                  {groqCopy?.configured ? ` · Groq ${groqCopy.requests}/${groqCopy.limit}` : ''}
+                  {groqCopy?.configured ? ` · ücretsiz havuz ${groqCopy.requests}/${groqCopy.limit}` : ''}
                   {' · '}görsel {upscaleUsage?.requests ?? 0}/{upscaleUsage?.limit ?? 6}
                 </small>
               </div>
@@ -1786,10 +1803,10 @@ export function Studio() {
                   {copyConfigured === null
                     ? 'API durumu kontrol ediliyor'
                     : groqCopy?.configured
-                      ? 'Önce Groq (ücretsiz) · gerekirse OpenAI'
+                      ? `Önce ${freePoolLabel} (ücretsiz) · gerekirse OpenAI`
                       : copyConfigured
                         ? 'Kaynak tabanlı · 3 metin · GPT-5.6 Luna · ücretli'
-                        : 'GROQ_API_KEY_1 veya OPENAI_API_KEY gerekli'}
+                        : 'GEMINI_API_KEY, CEREBRAS_API_KEY, GROQ_API_KEY_1 veya OPENAI_API_KEY gerekli'}
                 </small>
               </span>
             </button>
@@ -1847,10 +1864,10 @@ export function Studio() {
                   {copyConfigured === null
                     ? 'API durumu kontrol ediliyor'
                     : groqCopy?.configured
-                      ? 'Sadece caption · önce Groq (ücretsiz) · gerekirse OpenAI'
+                      ? `Sadece caption · önce ${freePoolLabel} (ücretsiz) · gerekirse OpenAI`
                       : copyConfigured
                         ? 'Sadece caption · GPT-5.6 Luna · ücretli'
-                        : 'GROQ_API_KEY_1 veya OPENAI_API_KEY gerekli'}
+                        : 'GEMINI_API_KEY, CEREBRAS_API_KEY, GROQ_API_KEY_1 veya OPENAI_API_KEY gerekli'}
                 </small>
               </span>
             </button>

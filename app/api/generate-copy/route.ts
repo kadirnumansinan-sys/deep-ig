@@ -199,6 +199,8 @@ export async function GET(request: Request) {
     groq: {
       configured: groq.configured,
       model: groq.copyModel,
+      // Ücretsiz havuzun gerçek deneme sırası; arayüz artık sabit "Groq" yazmıyor.
+      providerOrder: groq.providerOrder,
       usage: {
         requests: groq.usage.copy,
         limit: groq.usage.copyLimit,

@@ -112,14 +112,14 @@ export type GroqGapStory = {
   location: string;
 };
 
-const poolProviders: PoolProvider[] = ['cerebras', 'groq', 'gemini'];
+const poolProviders: PoolProvider[] = ['gemini', 'cerebras', 'groq'];
 
 function freshUsage(): DailyUsage {
   return {
     date: istanbulNowDate(),
+    gemini: { analysis: 0, search: 0, copy: 0 },
     cerebras: { analysis: 0, search: 0, copy: 0 },
     groq: { analysis: 0, search: 0, copy: 0 },
-    gemini: { analysis: 0, search: 0, copy: 0 },
   };
 }
 
@@ -141,12 +141,13 @@ function positiveInteger(value: string | undefined, fallback: number): number {
 }
 
 const limitDefaults: Record<PoolProvider, TaskCounters> = {
-  // Ücretsiz katmanı ~1M token/gün olduğu için uygulama sınırı bilinçli olarak cömert.
+  // Birincil katman: gemini-2.5-flash ücretsiz kotası günlük istek bazında cömert,
+  // RPM'i dar olduğu için sınır yine de sonsuz değil.
+  gemini: { analysis: 200, search: 0, copy: 120 },
+  // İkincil katman: ~1M token/gün, en hızlı çıkarım.
   cerebras: { analysis: 250, search: 0, copy: 150 },
   // Groq kotası korunur: web aramalı `groq/compound` başka sağlayıcıya devredilemiyor.
   groq: { analysis: 40, search: 16, copy: 30 },
-  // Ücretsiz katmanı düşük RPM'li; yalnızca taşma katmanı olduğu için dar tutulur.
-  gemini: { analysis: 60, search: 0, copy: 40 },
 };
 
 const limitEnvPrefix: Record<PoolProvider, string> = {
@@ -184,10 +185,10 @@ function groqModel(task: GroqTask): string {
 }
 
 // Öncelik sırası (slot numarası = deneme sırası):
-//   1) Cerebras  — en cömert ücretsiz kota (~1M token/gün), en hızlı çıkarım
-//   2) Groq #1   — ücretsiz ama dar; kotası arama görevi için korunur
-//   3) Groq #2
-//   4) Gemini    — düşük RPM'li son ücretsiz taşma katmanı
+//   1) Gemini    — birincil ücretsiz katman
+//   2) Cerebras  — ~1M token/gün, en hızlı çıkarım; Gemini RPM'e takılınca devralır
+//   3) Groq #1   — en son denenir; dar kotası arama görevi için korunur
+//   4) Groq #2
 // `search` görevi yalnızca Groq'ta çalışır: `groq/compound` modelinin dahili web
 // araması başka sağlayıcıda karşılığı olmadığı için devredilemez.
 function configuredSlots(task: GroqTask): ProviderSlot[] {
@@ -195,9 +196,28 @@ function configuredSlots(task: GroqTask): ProviderSlot[] {
   const cerebrasKey = process.env.CEREBRAS_API_KEY?.trim();
   const geminiKey = process.env.GEMINI_API_KEY?.trim();
 
-  if (task !== 'search' && cerebrasKey) {
+  if (task !== 'search' && geminiKey) {
     slots.push({
       slot: 1,
+      provider: 'gemini',
+      label: 'Gemini',
+      endpoint: geminiEndpoint,
+      key: geminiKey,
+      // OpenAI uyumluluk katmanı `max_completion_tokens`, `reasoning_effort` ve
+      // `strict` alanlarını kabul etmiyor; gövde bunlara göre sadeleştirilir.
+      model: envValue(
+        task === 'copy' ? 'GEMINI_COPY_MODEL' : 'GEMINI_ANALYSIS_MODEL',
+        defaultGeminiModel,
+      ),
+      supportsReasoningEffort: false,
+      supportsMaxCompletionTokens: false,
+      supportsStrictSchema: false,
+    });
+  }
+
+  if (task !== 'search' && cerebrasKey) {
+    slots.push({
+      slot: 2,
       provider: 'cerebras',
       label: 'Cerebras',
       endpoint: cerebrasEndpoint,
@@ -216,7 +236,7 @@ function configuredSlots(task: GroqTask): ProviderSlot[] {
     const key = raw?.trim();
     if (!key) return;
     slots.push({
-      slot: 2 + index,
+      slot: 3 + index,
       provider: 'groq',
       label: `Groq #${index + 1}`,
       endpoint: groqEndpoint,
@@ -227,25 +247,6 @@ function configuredSlots(task: GroqTask): ProviderSlot[] {
       supportsStrictSchema: true,
     });
   });
-
-  if (task !== 'search' && geminiKey) {
-    slots.push({
-      slot: 4,
-      provider: 'gemini',
-      label: 'Gemini',
-      endpoint: geminiEndpoint,
-      key: geminiKey,
-      // OpenAI uyumluluk katmanı `max_completion_tokens`, `reasoning_effort` ve
-      // `strict` alanlarını kabul etmiyor; gövde bunlara göre sadeleştirilir.
-      model: envValue(
-        task === 'copy' ? 'GEMINI_COPY_MODEL' : 'GEMINI_ANALYSIS_MODEL',
-        defaultGeminiModel,
-      ),
-      supportsReasoningEffort: false,
-      supportsMaxCompletionTokens: false,
-      supportsStrictSchema: false,
-    });
-  }
 
   return slots;
 }
@@ -368,7 +369,7 @@ async function groqRequest(
     throw new GroqUnavailableError(
       task === 'search'
         ? 'GROQ_API_KEY_1 veya GROQ_API_KEY_2 ayarlı değil (arama yalnızca Groq üzerinden çalışır).'
-        : 'Ücretsiz sağlayıcı anahtarı ayarlı değil (CEREBRAS_API_KEY / GROQ_API_KEY_1 / GEMINI_API_KEY).',
+        : 'Ücretsiz sağlayıcı anahtarı ayarlı değil (GEMINI_API_KEY / CEREBRAS_API_KEY / GROQ_API_KEY_1).',
     );
   }
 
@@ -1018,7 +1019,7 @@ export function groqStatus() {
     searchModel: process.env.GROQ_SEARCH_MODEL?.trim() || defaultSearchModel,
     copyModel: groqCopyModel(),
     keysShareQuota: keysShareQuota(),
-    // Deneme sırası: Cerebras → Groq #1 → Groq #2 → Gemini.
+    // Deneme sırası: Gemini → Cerebras → Groq #1 → Groq #2.
     providerOrder: slots.map((slot) => slot.label),
     usage: {
       date: dailyUsage.date,
