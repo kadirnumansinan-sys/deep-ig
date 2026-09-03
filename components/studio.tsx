@@ -36,7 +36,7 @@ import {
 import { loadStudioState, saveStudioState } from '@/lib/draft-storage';
 import { isLanguageMatch } from '@/lib/language';
 import { MusicPicker, type MusicSelection } from '@/components/music-picker';
-import { musicCredit, suggestTrack, trackById, trackUrl } from '@/lib/music/catalog';
+import { musicCredit, musicCreditLine, suggestTrack, trackById, trackUrl } from '@/lib/music/catalog';
 import { loadReelAudio } from '@/lib/video/audio';
 import {
   encodeReel,
@@ -87,6 +87,7 @@ type BuiltMedia = {
   videoNote: string;
   musicNote: string | null;
   audioName: string | null;
+  creditLine: string | null;
 };
 
 // next.config.ts bu üçünü derleme sırasında hesaplar; webpack DefinePlugin satır içine gömer.
@@ -968,6 +969,7 @@ export function Studio() {
     let video: Blob | null = null;
     let musicNote: string | null = null;
     let audioName: string | null = null;
+    let creditLine: string | null = null;
     let videoNote = 'video atlandı (tarayıcı desteklemiyor, Chrome/Edge gerekli)';
     if (videoExportSupported()) {
       setNotice('7 saniyelik video hazırlanıyor…');
@@ -1040,6 +1042,8 @@ export function Studio() {
           // Instagram Graph API'de trend/telifli müzik seçilemiyor; aynı parçayı her gönderide
           // aynı isimle etiketlemek en azından tanınabilir, tıklanabilir bir "audio" sayfası oluşturur.
           audioName = track.title.slice(0, 75);
+          // CC BY lisansı atfı zorunlu kılıyor; bu satır olmadan yayın lisans ihlali olur.
+          if (track.attributionRequired) creditLine = musicCreditLine(track);
         }
         videoNote = hasAudio ? `video: ${trackNote}` : 'video: sessiz';
       } finally {
@@ -1048,7 +1052,7 @@ export function Studio() {
       }
     }
 
-    return { base, cover, detail, video, videoNote, musicNote, audioName };
+    return { base, cover, detail, video, videoNote, musicNote, audioName, creditLine };
   }
 
   async function exportPackage() {
@@ -1096,6 +1100,9 @@ export function Studio() {
     try {
       const media = await buildMedia();
       if (!media.video) throw new Error('Video üretilemedi, yayın iptal edildi.');
+      const caption = media.creditLine
+        ? `${draft.caption.trim()}\n\n${media.creditLine}`
+        : draft.caption.trim();
 
       setNotice('Medya Blob deposuna yükleniyor…');
       const uploadOptions = { access: 'public', handleUploadUrl: '/api/blob/upload' } as const;
@@ -1116,7 +1123,7 @@ export function Studio() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           channel,
-          caption: draft.caption.trim(),
+          caption,
           videoUrl: videoBlob.url,
           coverUrl: coverBlob.url,
           audioName: media.audioName,

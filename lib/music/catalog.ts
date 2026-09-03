@@ -85,6 +85,12 @@ export function suggestTrack(channel: Channel, excludeId?: string): MusicTrack |
   return list[Math.floor(Math.random() * list.length)];
 }
 
+/** Gönderi açıklamasına eklenecek tek satırlık kısa atıf; CC BY lisansı bunu zorunlu kılar. */
+export function musicCreditLine(track: MusicTrack): string {
+  const artist = track.artist || 'Bilinmeyen sanatçı';
+  return `🎵 ${track.title} — ${artist} (${track.license})`;
+}
+
 export function musicCredit(track: MusicTrack): string {
   return [
     `Parça: ${track.title}`,
