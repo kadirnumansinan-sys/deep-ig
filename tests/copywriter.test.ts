@@ -7,6 +7,7 @@ import {
   copyJsonSchema,
   hashtagCount,
   reachHashtagMinimum,
+  reachHashtags,
   sanitizeGeneratedCopy,
   validationIssue,
 } from '../lib/copywriter';
@@ -157,6 +158,6 @@ test('konu etiketleri korunur, eksik erişim etiketi havuzdan eklenir', () => {
 
   assert.equal(copy.hashtags.length, hashtagCount);
   assert.ok(copy.hashtags.includes('#Ankara'));
-  assert.ok(copy.hashtags.filter((tag) => ['#sondakika', '#haber', '#gündem', '#türkiye', '#haberler'].includes(tag))
+  assert.ok(copy.hashtags.filter((tag) => reachHashtags('news').includes(tag))
     .length >= reachHashtagMinimum);
 });

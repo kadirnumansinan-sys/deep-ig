@@ -32,14 +32,37 @@ export const hashtagCount = 5;
 export const reachHashtagMinimum = 2;
 export const topicHashtagCount = hashtagCount - reachHashtagMinimum;
 
-// Kanal başına Instagram'da en yüksek kullanım hacmine sahip etiketler; sıra
-// önem sırasıdır, eksik kalan etiket baştan tamamlanır.
+// Kanal başına Instagram'da yüksek kullanım hacmine sahip etiketler. Havuz genişçe tutulur ve
+// seçim her gönderide karıştırılır (bkz. withReachHashtags); aksi halde günde 5-6 gönderiyle aynı
+// hesap aynı iki etiketi yüzlerce kez tekrarlar, bu da tekrarlayan/spam benzeri içerik sinyali olur.
 const reachHashtagsByChannel: Record<Channel, readonly string[]> = {
-  news: ['#sondakika', '#haber', '#gündem', '#türkiye', '#haberler'],
-  media: ['#keşfet', '#gündem', '#haber', '#türkiye', '#sondakika'],
-  history: ['#tarih', '#keşfet', '#tarihtebugün', '#bilgi', '#türkiye'],
-  international: ['#news', '#breakingnews', '#worldnews', '#globalnews', '#today'],
+  news: [
+    '#sondakika', '#haber', '#gündem', '#türkiye', '#haberler',
+    '#günün haberleri', '#haberturk', '#sondakikahaber',
+  ],
+  media: [
+    '#keşfet', '#gündem', '#haber', '#türkiye', '#sondakika',
+    '#viral', '#keşfetteyiz', '#trend',
+  ],
+  history: [
+    '#tarih', '#keşfet', '#tarihtebugün', '#bilgi', '#türkiye',
+    '#tarihibilgiler', '#genelkültür', '#tarihaşkı',
+  ],
+  international: [
+    '#news', '#breakingnews', '#worldnews', '#globalnews', '#today',
+    '#worldnewstoday', '#currentaffairs', '#explore',
+  ],
 };
+
+// Basit, bağımlılıksız bir Fisher-Yates: her çağrıda etiket seçimi değişsin diye.
+function shuffled<T>(items: readonly T[]): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
 
 export function reachHashtags(channel: Channel): readonly string[] {
   return reachHashtagsByChannel[channel] ?? reachHashtagsByChannel.news;
@@ -136,7 +159,7 @@ const hashtagKey = (tag: string): string => tag.toLocaleLowerCase('tr-TR');
  * Modelin ne döndürdüğünden bağımsız çalışır; dört sağlayıcı da aynı karışımı verir.
  */
 function withReachHashtags(tags: readonly string[], channel: Channel): string[] {
-  const pool = reachHashtags(channel);
+  const pool = shuffled(reachHashtags(channel));
   const poolKeys = new Set(pool.map(hashtagKey));
   const topic = tags.filter((tag) => !poolKeys.has(hashtagKey(tag)));
   const popular = tags.filter((tag) => poolKeys.has(hashtagKey(tag)));
