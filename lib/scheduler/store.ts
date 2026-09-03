@@ -25,6 +25,8 @@ export type ScheduledPost = {
   caption: string;
   videoUrl: string;
   coverUrl: string;
+  audioName: string | null;
+  trialReel: boolean;
   scheduledAt: Date;
   status: PostStatus;
   containerId: string | null;
@@ -80,6 +82,8 @@ export async function ensureSchema(): Promise<void> {
           caption text NOT NULL DEFAULT '',
           video_url text NOT NULL,
           cover_url text NOT NULL DEFAULT '',
+          audio_name text,
+          trial_reel boolean NOT NULL DEFAULT true,
           scheduled_at timestamptz NOT NULL,
           status text NOT NULL DEFAULT 'scheduled',
           container_id text,
@@ -96,6 +100,9 @@ export async function ensureSchema(): Promise<void> {
         CREATE INDEX IF NOT EXISTS scheduled_posts_due_idx
         ON scheduled_posts (status, scheduled_at)
       `;
+      // Tablo daha önce audio_name/trial_reel olmadan oluşturulmuş olabilir.
+      await sql`ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS audio_name text`;
+      await sql`ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS trial_reel boolean NOT NULL DEFAULT true`;
       await sql`
         CREATE TABLE IF NOT EXISTS ig_accounts (
           channel text PRIMARY KEY,
@@ -138,6 +145,8 @@ export function mapPost(row: Row): ScheduledPost {
     caption: text(row.caption),
     videoUrl: text(row.video_url),
     coverUrl: text(row.cover_url),
+    audioName: optionalText(row.audio_name),
+    trialReel: row.trial_reel !== false,
     scheduledAt: toDate(row.scheduled_at) ?? new Date(0),
     status: text(row.status) as PostStatus,
     containerId: optionalText(row.container_id),
@@ -157,14 +166,16 @@ export async function insertPost(input: {
   caption: string;
   videoUrl: string;
   coverUrl: string;
+  audioName?: string | null;
+  trialReel?: boolean;
   scheduledAt: Date;
 }): Promise<ScheduledPost> {
   await ensureSchema();
   const sql = db();
   const rows = (await sql`
-    INSERT INTO scheduled_posts (id, channel, caption, video_url, cover_url, scheduled_at, status)
+    INSERT INTO scheduled_posts (id, channel, caption, video_url, cover_url, audio_name, trial_reel, scheduled_at, status)
     VALUES (${input.id}, ${input.channel}, ${input.caption}, ${input.videoUrl}, ${input.coverUrl},
-            ${input.scheduledAt.toISOString()}, 'scheduled')
+            ${input.audioName || null}, ${input.trialReel !== false}, ${input.scheduledAt.toISOString()}, 'scheduled')
     RETURNING *
   `) as Row[];
   return mapPost(rows[0]);

@@ -86,6 +86,7 @@ type BuiltMedia = {
   video: Blob | null;
   videoNote: string;
   musicNote: string | null;
+  audioName: string | null;
 };
 
 // next.config.ts bu üçünü derleme sırasında hesaplar; webpack DefinePlugin satır içine gömer.
@@ -107,6 +108,9 @@ export function Studio() {
   const [isNarrow, setIsNarrow] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
+  // Varsayılan açık: deneme reel'i önce takipçi olmayanlara gösterilir, iyi performans
+  // gösterirse otomatik tüm kitleye "mezun olur" (Meta'nın SS_PERFORMANCE mekanizması).
+  const [trialReel, setTrialReel] = useState(true);
   const [musicSelection, setMusicSelection] = useState<Record<Channel, MusicSelection | null>>(() => ({
     history: null,
     news: null,
@@ -963,6 +967,7 @@ export function Studio() {
     // Gönderi kartından 7 saniyelik, hafif zoom'lu MP4. Kapak görseli JPG olarak kalır.
     let video: Blob | null = null;
     let musicNote: string | null = null;
+    let audioName: string | null = null;
     let videoNote = 'video atlandı (tarayıcı desteklemiyor, Chrome/Edge gerekli)';
     if (videoExportSupported()) {
       setNotice('7 saniyelik video hazırlanıyor…');
@@ -1030,7 +1035,12 @@ export function Studio() {
           onProgress: setExportProgress,
         });
         video = blob;
-        if (track && hasAudio) musicNote = musicCredit(track);
+        if (track && hasAudio) {
+          musicNote = musicCredit(track);
+          // Instagram Graph API'de trend/telifli müzik seçilemiyor; aynı parçayı her gönderide
+          // aynı isimle etiketlemek en azından tanınabilir, tıklanabilir bir "audio" sayfası oluşturur.
+          audioName = track.title.slice(0, 75);
+        }
         videoNote = hasAudio ? `video: ${trackNote}` : 'video: sessiz';
       } finally {
         bitmap.close();
@@ -1038,7 +1048,7 @@ export function Studio() {
       }
     }
 
-    return { base, cover, detail, video, videoNote, musicNote };
+    return { base, cover, detail, video, videoNote, musicNote, audioName };
   }
 
   async function exportPackage() {
@@ -1109,6 +1119,8 @@ export function Studio() {
           caption: draft.caption.trim(),
           videoUrl: videoBlob.url,
           coverUrl: coverBlob.url,
+          audioName: media.audioName,
+          trialReel,
           scheduledAt: target.scheduledAt.toISOString(),
           publishNow: target.publishNow,
         }),
@@ -1656,7 +1668,9 @@ export function Studio() {
             channel={channel}
             onPublishNow={publishPostNow}
             onSchedule={schedulePost}
+            onTrialReelChange={setTrialReel}
             progress={exportProgress}
+            trialReel={trialReel}
           />
         </section>
       </div>

@@ -96,8 +96,10 @@ export async function createReelContainer(options: {
   videoUrl: string;
   coverUrl?: string;
   caption?: string;
+  audioName?: string | null;
+  trialReel?: boolean;
 }): Promise<string> {
-  const { account, videoUrl, coverUrl, caption } = options;
+  const { account, videoUrl, coverUrl, caption, audioName, trialReel } = options;
   const payload = await callGraph<{ id?: string }>(
     graphUrl(account.host, `${account.igUserId}/media`, {}),
     postForm({
@@ -105,6 +107,12 @@ export async function createReelContainer(options: {
       video_url: videoUrl,
       cover_url: coverUrl || '',
       caption: caption || '',
+      share_to_feed: 'true',
+      audio_name: audioName || '',
+      // Deneme reel'i: önce sadece takipçi olmayanlara gösterilir, iyi performans gösterirse
+      // otomatik tüm kitleye "mezun olur". Düşük performanslı içeriğin mevcut takipçiyi
+      // yormasını engelleyen, Meta'nın kendi önerdiği bir mekanizma.
+      ...(trialReel ? { trial_params: JSON.stringify({ graduation_strategy: 'SS_PERFORMANCE' }) } : {}),
       access_token: account.accessToken,
     }),
   );

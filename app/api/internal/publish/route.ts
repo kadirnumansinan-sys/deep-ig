@@ -147,6 +147,8 @@ async function runPublish(request: Request) {
           videoUrl: post.videoUrl,
           coverUrl: post.coverUrl,
           caption: post.caption,
+          audioName: post.audioName,
+          trialReel: post.trialReel,
         });
         await markPost(post.id, {
           status: 'processing',

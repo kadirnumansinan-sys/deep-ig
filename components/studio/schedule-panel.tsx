@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarClock, ExternalLink, Send, X } from 'lucide-react';
+import { CalendarClock, ExternalLink, FlaskConical, Send, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import type { Channel } from '@/lib/content';
 
@@ -90,9 +90,19 @@ type Props = {
   progress: number;
   onPublishNow: () => Promise<void>;
   onSchedule: (scheduledAt: Date) => Promise<void>;
+  onTrialReelChange: (value: boolean) => void;
+  trialReel: boolean;
 };
 
-export function SchedulePanel({ busy, channel, progress, onPublishNow, onSchedule }: Props) {
+export function SchedulePanel({
+  busy,
+  channel,
+  progress,
+  onPublishNow,
+  onSchedule,
+  onTrialReelChange,
+  trialReel,
+}: Props) {
   const [when, setWhen] = useState(defaultValue);
   const [queue, setQueue] = useState<QueueResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -185,6 +195,18 @@ export function SchedulePanel({ busy, channel, progress, onPublishNow, onSchedul
           </small>
         </span>
       </div>
+
+      <button
+        aria-pressed={trialReel}
+        className={`schedule-trial${trialReel ? ' active' : ''}`}
+        disabled={working}
+        onClick={() => onTrialReelChange(!trialReel)}
+        title="Deneme reel'i önce takipçi olmayanlara gösterilir; iyi performans gösterirse Instagram onu otomatik olarak tüm kitleye açar (SS_PERFORMANCE)."
+        type="button"
+      >
+        <FlaskConical size={11} />
+        Deneme Reel'i: {trialReel ? 'açık' : 'kapalı'}
+      </button>
 
       <div className="schedule-row">
         <input

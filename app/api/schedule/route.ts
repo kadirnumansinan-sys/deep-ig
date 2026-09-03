@@ -148,6 +148,8 @@ export async function POST(request: Request) {
   }
 
   const caption = (typeof input.caption === 'string' ? input.caption : '').trim().slice(0, MAX_CAPTION);
+  const audioName = typeof input.audioName === 'string' ? input.audioName.trim().slice(0, 75) : '';
+  const trialReel = input.trialReel !== false;
 
   try {
     const post = await insertPost({
@@ -156,6 +158,8 @@ export async function POST(request: Request) {
       caption,
       videoUrl,
       coverUrl,
+      audioName,
+      trialReel,
       scheduledAt,
     });
     if (!publishNow) return ok({ post: serialize(post) });

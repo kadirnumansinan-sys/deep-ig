@@ -1026,6 +1026,22 @@ button { color: inherit; }
 .schedule-head span, .schedule-head strong, .schedule-head small { display: block; }
 .schedule-head strong { font-size: 9px; }
 .schedule-head small { color: #898b91; font-size: 7px; margin-top: 3px; }
+.schedule-trial {
+  align-items: center;
+  align-self: flex-start;
+  background: #fbfbfa;
+  border: 1px solid #e0e0dc;
+  border-radius: 999px;
+  color: #898b91;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 7px;
+  font-weight: 750;
+  gap: 5px;
+  padding: 5px 10px;
+}
+.schedule-trial.active { background: #eef7ee; border-color: #b6ddb6; color: #2a7a2a; }
+.schedule-trial:disabled { cursor: not-allowed; opacity: 0.5; }
 .schedule-row { align-items: center; display: flex; gap: 8px; }
 .schedule-row input {
   background: #fbfbfa;
