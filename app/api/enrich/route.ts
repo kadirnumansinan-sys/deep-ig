@@ -289,7 +289,9 @@ export async function GET(request: Request) {
     }
 
     const html = await readLimitedHtml(response);
-    const structured = jsonLdEvidence(html);
+    // "İlgili haberler" widget'ları da kendi Article JSON-LD'sini gömüyor; temizlenmemiş
+    // html'de bu, önceki/başka bir haberin görselinin seçilmesine yol açıyordu.
+    const structured = jsonLdEvidence(stripNoiseBlocks(html));
     const rawImages = [
       ...metaContents(html, [
         'og:image:secure_url', 'og:image:url', 'og:image', 'twitter:image:src', 'twitter:image',
