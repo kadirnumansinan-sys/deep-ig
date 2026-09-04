@@ -51,7 +51,7 @@ for (const file of files) {
     file,
     license: 'BELIRT',
     sourceUrl: '',
-    attributionRequired: true,
+    attributionRequired: false,
     moods: ['neutral'],
     startSec: 0,
     gain: 0.6,
