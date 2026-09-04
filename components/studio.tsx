@@ -393,6 +393,7 @@ export function Studio() {
   }
 
   function changeChannel(nextChannel: Channel) {
+    if (exporting) return;
     setChannel(nextChannel);
     setCandidateFilters(new Set());
     setShowAll(false);
@@ -481,6 +482,10 @@ export function Studio() {
   }, [notice]);
 
   async function selectCandidate(candidate: ContentCandidate) {
+    // Yayın hazırlanırken (buildMedia coverRef/detailRef DOM'unu canlı okur) DOM'un
+    // altını değiştirmeyi engelle — aksi halde devam eden yayın yanlış habere ait
+    // görsel yakalayabilir.
+    if (exporting) return;
     const targetChannel = channel;
     const warnings: string[] = [];
     if (candidate.freshnessStatus === 'stale') {
@@ -1214,6 +1219,7 @@ export function Studio() {
             {channels.map((item) => (
               <button
                 className={item.id === channel ? 'channel-tab active' : 'channel-tab'}
+                disabled={exporting}
                 key={item.id}
                 onClick={() => changeChannel(item.id)}
                 type="button"
@@ -1314,6 +1320,7 @@ export function Studio() {
               {!loading && !discoveryError && visibleCandidates.map((candidate) => (
                 <CandidateCard
                   candidate={candidate}
+                  disabled={exporting}
                   key={candidate.id}
                   loading={enrichingId === candidate.id}
                   onSelect={() => void selectCandidate(candidate)}

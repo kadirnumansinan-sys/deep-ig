@@ -8,10 +8,12 @@ import { formatTime, freshnessLabel, proxied } from '@/components/studio/utils';
 export function CandidateCard({
   candidate,
   loading,
+  disabled,
   onSelect,
 }: {
   candidate: ContentCandidate;
   loading: boolean;
+  disabled?: boolean;
   onSelect: () => void;
 }) {
   const sourceCount = candidate.verification?.sourceCount || 1;
@@ -25,7 +27,7 @@ export function CandidateCard({
   return (
     <button
       className={`candidate-card freshness-${candidate.freshnessStatus || 'unverified'}${candidate.breaking ? ' is-breaking' : ''}${conflicts.length ? ' has-conflict' : ''}`}
-      disabled={loading || candidate.freshnessStatus === 'stale'}
+      disabled={loading || disabled || candidate.freshnessStatus === 'stale'}
       onClick={onSelect}
       title={candidateTitle}
       type="button"
